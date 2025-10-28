@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { FileText, FileCheck, Clock, CheckCircle2, Plus } from "lucide-react";
+import { FileText, FileCheck, Clock, CheckCircle2, Plus, Filter, Search } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import type { Sow } from "@shared/schema";
 import { format } from "date-fns";
+import bgImage from "@assets/stock_images/abstract_blue_purple_8c94cc67.jpg";
 
 const statusConfig = {
   draft: {
@@ -56,8 +57,14 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="flex-1 overflow-auto">
-      <div className="max-w-7xl mx-auto p-8 space-y-8">
+    <div className="flex-1 overflow-auto relative">
+      <div 
+        className="absolute inset-0 bg-cover bg-center opacity-5"
+        style={{ backgroundImage: `url(${bgImage})` }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/10" />
+      
+      <div className="relative max-w-7xl mx-auto p-8 space-y-8">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-foreground" data-testid="text-page-title">SOW Dashboard</h1>
           <p className="text-muted-foreground" data-testid="text-page-description">Manage and track all your Statement of Work documents</p>

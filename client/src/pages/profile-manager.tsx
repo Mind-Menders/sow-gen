@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { User, Plus, Edit, Trash2, Mail, Building, CheckCircle, XCircle } from "lucide-react";
+import { User, Plus, Edit, Trash2, Mail, Building, CheckCircle, XCircle, Save } from "lucide-react";
+import bgImage from "@assets/stock_images/modern_office_worksp_0da7beab.jpg";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -119,8 +120,14 @@ export default function ProfileManager() {
   };
 
   return (
-    <div className="flex-1 overflow-auto">
-      <div className="max-w-7xl mx-auto p-8 space-y-8">
+    <div className="flex-1 overflow-auto relative">
+      <div 
+        className="absolute inset-0 bg-cover bg-center opacity-5"
+        style={{ backgroundImage: `url(${bgImage})` }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/10" />
+      
+      <div className="relative max-w-7xl mx-auto p-8 space-y-8">
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-foreground" data-testid="text-page-title">
