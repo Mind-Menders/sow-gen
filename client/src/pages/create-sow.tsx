@@ -59,8 +59,15 @@ export default function CreateSOW() {
   const [formData, setFormData] = useState({
     sowType: "",
     title: "",
-    vendorName: "",
+    initiative: "",
+    deliveryPortfolio: "",
     sponsor: "",
+    businessOwner: "",
+    vendorName: "",
+    startDate: "",
+    endDate: "",
+    budget: "",
+    currency: "USD",
     templateId: "",
     workflowId: "",
   });
@@ -88,8 +95,15 @@ export default function CreateSOW() {
       return apiRequest("POST", "/api/sows", {
         sowType: formData.sowType,
         title: formData.title,
+        initiative: formData.initiative,
+        deliveryPortfolio: formData.deliveryPortfolio || undefined,
         vendorName: formData.vendorName,
-        sponsor: formData.sponsor,
+        sponsor: formData.sponsor || undefined,
+        businessOwner: formData.businessOwner || undefined,
+        startDate: formData.startDate || undefined,
+        endDate: formData.endDate || undefined,
+        budget: formData.budget || undefined,
+        currency: formData.currency || "USD",
         status: formData.workflowId ? "pending_approval" : "draft",
         workflowId: formData.workflowId || undefined,
         sections: sectionsData,
@@ -111,7 +125,7 @@ export default function CreateSOW() {
 
   const canProceed = () => {
     if (currentStep === 1) return !!formData.sowType;
-    if (currentStep === 2) return !!formData.title && !!formData.vendorName && !!formData.sponsor;
+    if (currentStep === 2) return !!formData.title && !!formData.initiative && !!formData.vendorName;
     if (currentStep === 3) return !!formData.templateId;
     return true;
   };
@@ -205,34 +219,119 @@ export default function CreateSOW() {
             {currentStep === 2 && (
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="title">Project Title *</Label>
+                  <Label htmlFor="title">SOW Title *</Label>
                   <Input
                     id="title"
-                    placeholder="Enter project title"
+                    placeholder="e.g., Digital Transformation Project 2024"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     data-testid="input-title"
                   />
                 </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="initiative">Initiative *</Label>
+                    <Input
+                      id="initiative"
+                      placeholder="Initiative name"
+                      value={formData.initiative}
+                      onChange={(e) => setFormData({ ...formData, initiative: e.target.value })}
+                      data-testid="input-initiative"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="deliveryPortfolio">Delivery Portfolio</Label>
+                    <Input
+                      id="deliveryPortfolio"
+                      placeholder="Portfolio name"
+                      value={formData.deliveryPortfolio}
+                      onChange={(e) => setFormData({ ...formData, deliveryPortfolio: e.target.value })}
+                      data-testid="input-delivery-portfolio"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sponsor">Sponsor</Label>
+                    <Input
+                      id="sponsor"
+                      placeholder="Project sponsor name"
+                      value={formData.sponsor}
+                      onChange={(e) => setFormData({ ...formData, sponsor: e.target.value })}
+                      data-testid="input-sponsor"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="businessOwner">Business Owner</Label>
+                    <Input
+                      id="businessOwner"
+                      placeholder="Business owner name"
+                      value={formData.businessOwner}
+                      onChange={(e) => setFormData({ ...formData, businessOwner: e.target.value })}
+                      data-testid="input-business-owner"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="vendor">Vendor Name *</Label>
                   <Input
                     id="vendor"
-                    placeholder="Enter vendor name"
+                    placeholder="Vendor or contractor name"
                     value={formData.vendorName}
                     onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
                     data-testid="input-vendor"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sponsor">Sponsor *</Label>
-                  <Input
-                    id="sponsor"
-                    placeholder="Enter sponsor name"
-                    value={formData.sponsor}
-                    onChange={(e) => setFormData({ ...formData, sponsor: e.target.value })}
-                    data-testid="input-sponsor"
-                  />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="startDate">Start Date</Label>
+                    <Input
+                      id="startDate"
+                      type="date"
+                      value={formData.startDate}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      data-testid="input-start-date"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="endDate">End Date</Label>
+                    <Input
+                      id="endDate"
+                      type="date"
+                      value={formData.endDate}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      data-testid="input-end-date"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="budget">Budget</Label>
+                    <Input
+                      id="budget"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formData.budget}
+                      onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+                      data-testid="input-budget"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="currency">Currency</Label>
+                    <Input
+                      id="currency"
+                      placeholder="USD"
+                      value={formData.currency}
+                      onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                      data-testid="input-currency"
+                    />
+                  </div>
                 </div>
               </div>
             )}
