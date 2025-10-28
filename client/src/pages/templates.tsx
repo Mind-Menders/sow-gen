@@ -11,7 +11,7 @@ export default function Templates() {
   });
 
   return (
-    <div className="flex-1 overflow-auto">
+    <div className="flex-1 overflow-y-auto">
       <div className="max-w-7xl mx-auto p-8 space-y-8">
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-2">

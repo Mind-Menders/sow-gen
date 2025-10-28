@@ -148,7 +148,7 @@ export default function Workflows() {
   ];
 
   return (
-    <div className="flex-1 overflow-auto relative">
+    <div className="flex-1 overflow-y-auto relative">
       <div 
         className="absolute inset-0 bg-cover bg-center opacity-5"
         style={{ backgroundImage: `url(${bgImage})` }}

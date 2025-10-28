@@ -98,8 +98,8 @@ export default function ProfileManager() {
   const handleOpenEditDialog = (user: UserType) => {
     setEditingUser(user);
     setFormData({
-      name: user.name,
-      email: user.email,
+      name: user.name || "",
+      email: user.email || "",
       role: user.role,
       department: user.department || "",
       isActive: user.isActive,
@@ -120,7 +120,7 @@ export default function ProfileManager() {
   };
 
   return (
-    <div className="flex-1 overflow-auto relative">
+    <div className="flex-1 overflow-y-auto relative">
       <div 
         className="absolute inset-0 bg-cover bg-center opacity-5"
         style={{ backgroundImage: `url(${bgImage})` }}

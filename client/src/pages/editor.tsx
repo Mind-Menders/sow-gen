@@ -213,7 +213,7 @@ export default function Editor() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-8">
           <div className="space-y-4">
             <div className="h-8 bg-muted rounded w-48 animate-pulse" />
@@ -226,7 +226,7 @@ export default function Editor() {
 
   if (!sow) {
     return (
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-8">
           <p className="text-muted-foreground">SOW not found</p>
         </div>
@@ -238,7 +238,7 @@ export default function Editor() {
   const completedSections = sectionsList.filter(([, section]) => section.content.trim().length > 0).length;
 
   return (
-    <div className="flex-1 overflow-auto">
+    <div className="flex-1 overflow-y-auto">
       <div className="max-w-7xl mx-auto p-8 space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => setLocation("/")} data-testid="button-back">
