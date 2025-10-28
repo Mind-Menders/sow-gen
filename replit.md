@@ -1,7 +1,7 @@
 # SOW Generator - Enterprise Edition
 
 ## Overview
-An enterprise-grade Statement of Work (SOW) generator application with template management, multi-step creation workflow, document editor with AI-powered content generation, and approval tracking. Built with React, TypeScript, Express, MongoDB, and OpenAI integration.
+An enterprise-grade Statement of Work (SOW) generator application with template management, multi-step creation workflow, document editor with AI-powered content generation, workflow approval system, and user management. Built with React, TypeScript, Express, PostgreSQL (Neon), and OpenAI integration.
 
 ## Project Architecture
 
@@ -12,13 +12,16 @@ An enterprise-grade Statement of Work (SOW) generator application with template 
 - **Template Library**: Reusable SOW templates
 - **Sidebar Navigation**: Main menu with user profile
 
-### Backend (Express + MongoDB)
-- **SOW CRUD API**: Create, read, update, delete SOWs
+### Backend (Express + PostgreSQL)
+- **SOW CRUD API**: Create, read, update, delete SOWs with workflow linkage
 - **Template API**: Template management
-- **AI Content Generation**: OpenAI GPT-5 integration for generating section content
+- **User Management API**: User CRUD with roles and departments
+- **Workflow Management API**: Workflow CRUD with multi-stage approval configuration
+- **Approval Tracking API**: SOW approval status tracking with workflow stages
+- **AI Content Generation**: OpenAI GPT-4o integration for generating section content
 - **SOW Number Generation**: Auto-generated unique identifiers
-- **MongoDB Storage**: Persistent data storage with automatic initialization
-- **Sample Data**: Pre-populated templates and SOWs
+- **PostgreSQL Storage**: Persistent data storage via Drizzle ORM with Neon database
+- **Sample Data**: Pre-populated templates, SOWs, users, and workflows
 
 ### Design System
 - **Colors**: Enterprise blue/purple gradient theme (primary: `hsl(250 90% 60%)`)
@@ -45,16 +48,36 @@ An enterprise-grade Statement of Work (SOW) generator application with template 
 - Real-time content editing with auto-save (2-second debounce)
 - Section completion tracking
 - Manual and automatic save functionality
-- AI Assistant panel with GPT-5 powered content generation
+- AI Assistant panel with GPT-4o powered content generation
   - Generate content suggestions based on SOW context
   - Insert or copy AI-generated content
   - Context-aware suggestions using project details
 
+### Workflow & Approval System
+- Create and manage multi-stage approval workflows
+- Assign SOW types to workflows (RFT, Enhancement, Flexi Sourcing, etc.)
+- Configure approval stages with multiple reviewers per stage
+- Require all or any reviewer approval per stage
+- Workflow selection integrated into SOW creation wizard
+- Automatic approval tracking when workflow assigned
+- SOW status transitions (Draft → Pending Approval → Approved/Rejected)
+
+### User Management
+- Full user CRUD operations
+- Role-based access (Admin, Manager, Reviewer, User)
+- Department assignment for users
+- Active/inactive user status tracking
+- User selection for workflow reviewer assignments
+
 ## Technical Details
 
 ### Data Models
-- **SOW**: id, sowNumber, title, vendorName, sponsor, sowType, status, sections, timestamps
+- **SOW**: id, sowNumber, title, vendorName, sponsor, sowType, status, workflowId, sections, timestamps
 - **Template**: id, name, description, sowType, isOfficial, sections, createdAt
+- **User**: id, name, email, role, department, isActive, createdAt
+- **Workflow**: id, name, description, sowTypes (JSON), stages (JSON), isActive, timestamps
+- **WorkflowStage**: id, name, reviewerIds (array), requireAll (boolean)
+- **SowApproval**: id, sowId, workflowId, currentStage, reviewerId, status, comments, timestamps
 - **Section**: id, icon, title, content
 
 ### API Endpoints
@@ -69,24 +92,33 @@ An enterprise-grade Statement of Work (SOW) generator application with template 
 - `POST /api/ai/generate-content` - Generate AI content for SOW sections
 
 ### Storage
-Uses MongoDB for persistent data storage. Falls back to in-memory storage if MONGODB_URI is not configured. Automatically initializes with sample templates and SOWs on first run.
+Uses PostgreSQL for persistent data storage via Drizzle ORM. Falls back to in-memory storage if DATABASE_URL is not configured. Automatically initializes with sample templates, SOWs, users, and workflows on first run.
 
 ### AI Integration
-Uses Replit AI Integrations (OpenAI-compatible API) with GPT-5 model for content generation:
+Uses Replit AI Integrations (OpenAI-compatible API) with GPT-4o model for content generation:
 - No API key required (uses Replit credits)
 - Context-aware content generation
 - Professional SOW writing expertise
 - Can be replaced with Microsoft Azure AI if needed
 
 ## Recent Changes
-- **2025-10-28 (Latest)**: MongoDB backend and AI integration
-  - Migrated from in-memory storage to MongoDB
-  - Integrated OpenAI GPT-5 for AI content generation
+- **2025-10-28 (Latest)**: Complete Workflow Manager, Profile Manager, and approval system
+  - Built complete Workflow Manager page with multi-stage approval configuration UI
+  - Implemented full user management in Profile Manager (CRUD operations, roles, departments)
+  - Integrated workflow selection into SOW creation wizard step 4
+  - Added workflowId field to SOWs table and created approval tracking system
+  - Implemented automatic sowApprovals record creation when workflow assigned
+  - Set SOW status to "pending_approval" when workflow selected
+  - Added API endpoints for users and workflows (/api/users, /api/workflows)
+  - Seeded database with 4 sample users and 2 sample workflows
+  
+- **2025-10-28**: PostgreSQL migration and AI integration
+  - Migrated from MongoDB to PostgreSQL (Neon) using Drizzle ORM
+  - Integrated OpenAI GPT-4o for AI content generation
   - Added auto-save functionality with 2-second debounce
   - Implemented section-switching data protection
   - Added comprehensive error handling for save operations
   - Created AI Assistant panel with Insert/Copy functionality
-  - All navigation links now working (Workflow/Profile pages have placeholder UIs)
   
 - **2025-10-28**: Initial implementation with all core features
   - Implemented dashboard with statistics and filtering
@@ -117,13 +149,13 @@ Application runs on port 5000 with both frontend (Vite) and backend (Express) se
 - **Dashboard** (`/`) - Overview with statistics and SOW cards
 - **New SOW Request** (`/createsow`) - 4-step creation wizard
 - **Template Manager** (`/templates`) - Browse and manage templates
-- **Workflow Manager** (`/workflows`) - Placeholder page for approval workflows
-- **Profile Manager** (`/profilemanager`) - Placeholder page for user management
+- **Workflow Manager** (`/workflows`) - Manage approval workflows with multi-stage configuration
+- **Profile Manager** (`/profilemanager`) - User management with roles and permissions
 - **Editor** (`/editor?id={sowId}`) - Document editing with AI assistance
 
 ## Future Enhancements
-- Complete Workflow Manager implementation with approval routing
-- Complete Profile Manager with user roles and permissions
+- Approval status UI on SOW cards showing current stage and reviewers
+- Approval progression interface for reviewers to approve/reject stages
 - Collaborative editing with real-time sync
 - Version history and document comparison
 - Full-text search across SOWs
