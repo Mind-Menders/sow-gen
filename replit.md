@@ -124,7 +124,16 @@ Uses Replit AI Integrations (OpenAI-compatible API) with GPT-4o model for conten
 - Can be replaced with Microsoft Azure AI if needed
 
 ## Recent Changes
-- **2025-10-28 (Latest)**: Header Bar Removal and Sidebar Collapse Enhancement
+- **2025-10-28 (Latest)**: User Profile and Logout Functionality
+  - Added user profile dropdown menu in sidebar footer
+  - Displays authenticated user's actual name, role, and profile image
+  - Shows user initials in avatar (e.g., "JD" for John Doe)
+  - Clicking user profile opens dropdown menu with logout option
+  - Logout button redirects to /api/logout and ends user session
+  - User data fetched from Replit Auth session
+  - End-to-end tested and confirmed working
+
+- **2025-10-28**: Header Bar Removal and Sidebar Collapse Enhancement
   - **Removed header bar** completely from authenticated app
   - Main content now starts at the very top (no header gap)
   - Added **SidebarRail** component for sidebar collapse via clickable edge
