@@ -1,40 +1,37 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, type IStorage } from "./storage";
-import { MongoStorage } from "./mongo-storage";
+import { PostgresStorage } from "./postgres-storage";
 import { insertSowSchema, insertTemplateSchema } from "@shared/schema";
 import { generateContentSuggestion } from "./openai";
+import { seedDatabase } from "./seed";
 
 let dbStorage: IStorage = storage;
 
-// Try to initialize MongoDB if URI is provided
-const mongoUri = process.env.MONGODB_URI || "";
-if (mongoUri) {
-  let formattedUri = mongoUri;
-  if (!mongoUri.startsWith("mongodb://") && !mongoUri.startsWith("mongodb+srv://")) {
-    formattedUri = `mongodb://${mongoUri}`;
+// Initialize PostgreSQL storage if DATABASE_URL is available
+async function initializeStorage() {
+  if (process.env.DATABASE_URL) {
+    try {
+      const postgresStorage = new PostgresStorage();
+      // Test connection
+      await postgresStorage.getAllTemplates();
+      dbStorage = postgresStorage;
+      console.log("[storage] Using PostgreSQL storage");
+      
+      // Seed database with sample data
+      await seedDatabase();
+    } catch (error) {
+      console.warn("[storage] PostgreSQL connection failed, using in-memory storage:", error instanceof Error ? error.message : String(error));
+      dbStorage = storage;
+    }
+  } else {
+    console.log("[storage] Using in-memory storage (no DATABASE_URL configured)");
   }
-  
-  try {
-    const mongoStorage = new MongoStorage(formattedUri);
-    // Test the connection with a timeout
-    const connectionTest = Promise.race([
-      mongoStorage.getAllSows(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("MongoDB connection timeout")), 3000))
-    ]);
-    
-    await connectionTest;
-    dbStorage = mongoStorage;
-    console.log("[storage] Using MongoDB storage");
-  } catch (error) {
-    console.warn("[storage] MongoDB connection failed, using in-memory storage:", error instanceof Error ? error.message : String(error));
-    dbStorage = storage;
-  }
-} else {
-  console.log("[storage] Using in-memory storage (no MONGODB_URI configured)");
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize storage before registering routes
+  await initializeStorage();
   app.get("/api/sows", async (req, res) => {
     try {
       const sows = await dbStorage.getAllSows();
