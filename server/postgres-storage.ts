@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { sows, templates, users, workflows, sowApprovals, type Sow, type Template, type User, type Workflow, type SowApproval, type InsertSow, type InsertTemplate, type InsertUser, type InsertWorkflow, type InsertSowApproval } from "@shared/schema";
+import { sows, templates, users, workflows, sowApprovals, type Sow, type Template, type User, type UpsertUser, type Workflow, type SowApproval, type InsertSow, type InsertTemplate, type InsertUser, type InsertWorkflow, type InsertSowApproval } from "@shared/schema";
 import type { IStorage } from "./storage";
 
 export class PostgresStorage implements IStorage {
@@ -99,6 +99,26 @@ export class PostgresStorage implements IStorage {
   async deleteUser(id: string): Promise<boolean> {
     const result = await db.delete(users).where(eq(users.id, id)).returning();
     return result.length > 0;
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return result[0];
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const result = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return result[0];
   }
 
   // Workflow methods

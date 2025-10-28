@@ -5,6 +5,7 @@ import { PostgresStorage } from "./postgres-storage";
 import { insertSowSchema, insertTemplateSchema, insertUserSchema, insertWorkflowSchema } from "@shared/schema";
 import { generateContentSuggestion } from "./openai";
 import { seedDatabase } from "./seed";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 
 let dbStorage: IStorage = storage;
 
@@ -32,6 +33,22 @@ async function initializeStorage() {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize storage before registering routes
   await initializeStorage();
+  
+  // Setup authentication with the correct storage instance
+  await setupAuth(app, dbStorage);
+  
+  // Auth endpoint
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await dbStorage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+  
   app.get("/api/sows", async (req, res) => {
     try {
       const sows = await dbStorage.getAllSows();

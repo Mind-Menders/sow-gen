@@ -1,4 +1,4 @@
-import { type Sow, type InsertSow, type Template, type InsertTemplate, type User, type InsertUser, type Workflow, type InsertWorkflow, type SowApproval, type InsertSowApproval } from "@shared/schema";
+import { type Sow, type InsertSow, type Template, type InsertTemplate, type User, type InsertUser, type UpsertUser, type Workflow, type InsertWorkflow, type SowApproval, type InsertSowApproval } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -14,6 +14,8 @@ export interface IStorage {
   
   getAllUsers(): Promise<User[]>;
   getUserById(id: string): Promise<User | undefined>;
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
@@ -322,6 +324,95 @@ export class MemStorage implements IStorage {
     };
     this.templates.set(id, template);
     return template;
+  }
+
+  // User methods (stub implementations - app uses PostgresStorage)
+  async getAllUsers(): Promise<User[]> {
+    return [];
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    return undefined;
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    return undefined;
+  }
+
+  async upsertUser(user: UpsertUser): Promise<User> {
+    const now = new Date();
+    return {
+      id: randomUUID(),
+      name: null,
+      email: user.email || null,
+      firstName: user.firstName || null,
+      lastName: user.lastName || null,
+      profileImageUrl: user.profileImageUrl || null,
+      role: "user",
+      department: null,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const now = new Date();
+    return {
+      id: randomUUID(),
+      ...user,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    return undefined;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    return false;
+  }
+
+  // Workflow methods (stub implementations)
+  async getAllWorkflows(): Promise<Workflow[]> {
+    return [];
+  }
+
+  async getWorkflowById(id: string): Promise<Workflow | undefined> {
+    return undefined;
+  }
+
+  async createWorkflow(workflow: InsertWorkflow): Promise<Workflow> {
+    const now = new Date();
+    return {
+      id: randomUUID(),
+      ...workflow,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  async updateWorkflow(id: string, updates: Partial<Workflow>): Promise<Workflow | undefined> {
+    return undefined;
+  }
+
+  async deleteWorkflow(id: string): Promise<boolean> {
+    return false;
+  }
+
+  // Approval methods (stub implementations)
+  async createSowApproval(approval: InsertSowApproval): Promise<SowApproval> {
+    const now = new Date();
+    return {
+      id: randomUUID(),
+      ...approval,
+      createdAt: now,
+    };
+  }
+
+  async getSowApprovalsBySowId(sowId: string): Promise<SowApproval[]> {
+    return [];
   }
 }
 
