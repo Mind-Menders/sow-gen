@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Template } from "@shared/schema";
+import type { Template, Workflow, WorkflowStage } from "@shared/schema";
 
 const sowTypeOptions = [
   {
@@ -62,10 +62,15 @@ export default function CreateSOW() {
     vendorName: "",
     sponsor: "",
     templateId: "",
+    workflowId: "",
   });
 
   const { data: templates = [] } = useQuery<Template[]>({
     queryKey: ["/api/templates"],
+  });
+
+  const { data: workflows = [] } = useQuery<Workflow[]>({
+    queryKey: ["/api/workflows"],
   });
 
   const createSowMutation = useMutation({
@@ -85,7 +90,8 @@ export default function CreateSOW() {
         title: formData.title,
         vendorName: formData.vendorName,
         sponsor: formData.sponsor,
-        status: "draft",
+        status: formData.workflowId ? "pending_approval" : "draft",
+        workflowId: formData.workflowId || undefined,
         sections: sectionsData,
       });
     },
@@ -270,27 +276,68 @@ export default function CreateSOW() {
 
             {currentStep === 4 && (
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="workflow">Workflow</Label>
-                  <Select defaultValue="standard">
-                    <SelectTrigger data-testid="select-workflow">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="standard">Standard Approval</SelectItem>
-                      <SelectItem value="fast">Fast Track</SelectItem>
-                      <SelectItem value="comprehensive">Comprehensive Review</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="reviewers">Reviewers (Optional)</Label>
-                  <Input
-                    id="reviewers"
-                    placeholder="Add reviewer emails (comma-separated)"
-                    data-testid="input-reviewers"
-                  />
-                  <p className="text-xs text-muted-foreground">Reviewers will be notified when the SOW is ready for approval</p>
+                <h3 className="text-lg font-semibold mb-4">Select Approval Workflow</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Choose the approval workflow that matches your SOW type
+                </p>
+                <div className="space-y-4">
+                  {workflows
+                    .filter((w) => {
+                      if (!formData.sowType) return true;
+                      const sowTypes = JSON.parse(w.sowTypes) as string[];
+                      return sowTypes.includes(formData.sowType);
+                    })
+                    .map((workflow) => {
+                      const stages = JSON.parse(workflow.stages) as WorkflowStage[];
+                      const isSelected = formData.workflowId === workflow.id;
+                      return (
+                        <Card
+                          key={workflow.id}
+                          className={`cursor-pointer border-2 transition-all hover-elevate ${
+                            isSelected ? "border-primary bg-accent" : "border-card-border"
+                          }`}
+                          onClick={() => setFormData({ ...formData, workflowId: workflow.id })}
+                          data-testid={`card-workflow-${workflow.id}`}
+                        >
+                          <CardHeader>
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <CardTitle className="text-base mb-2">{workflow.name}</CardTitle>
+                                <CardDescription className="text-sm mb-3">{workflow.description}</CardDescription>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    {stages.length} {stages.length === 1 ? "stage" : "stages"}
+                                  </Badge>
+                                  {workflow.isActive && (
+                                    <Badge variant="secondary" className="text-xs">active</Badge>
+                                  )}
+                                </div>
+                                {stages.length > 0 && (
+                                  <div className="mt-3 pt-3 border-t space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground mb-2">Approval Stages:</p>
+                                    {stages.map((stage, index) => (
+                                      <div key={stage.id} className="text-xs text-muted-foreground">
+                                        {index + 1}. {stage.name}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </CardHeader>
+                        </Card>
+                      );
+                    })}
+                  {workflows.filter((w) => {
+                    if (!formData.sowType) return true;
+                    const sowTypes = JSON.parse(w.sowTypes) as string[];
+                    return sowTypes.includes(formData.sowType);
+                  }).length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p className="text-sm">No workflows available for this SOW type</p>
+                      <p className="text-xs mt-2">You can proceed without selecting a workflow</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

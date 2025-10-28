@@ -1,4 +1,4 @@
-import { type Sow, type InsertSow, type Template, type InsertTemplate } from "@shared/schema";
+import { type Sow, type InsertSow, type Template, type InsertTemplate, type User, type InsertUser, type Workflow, type InsertWorkflow, type SowApproval, type InsertSowApproval } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -11,6 +11,21 @@ export interface IStorage {
   getAllTemplates(): Promise<Template[]>;
   getTemplateById(id: string): Promise<Template | undefined>;
   createTemplate(template: InsertTemplate): Promise<Template>;
+  
+  getAllUsers(): Promise<User[]>;
+  getUserById(id: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
+  deleteUser(id: string): Promise<boolean>;
+  
+  getAllWorkflows(): Promise<Workflow[]>;
+  getWorkflowById(id: string): Promise<Workflow | undefined>;
+  createWorkflow(workflow: InsertWorkflow): Promise<Workflow>;
+  updateWorkflow(id: string, updates: Partial<Workflow>): Promise<Workflow | undefined>;
+  deleteWorkflow(id: string): Promise<boolean>;
+  
+  createSowApproval(approval: InsertSowApproval): Promise<SowApproval>;
+  getSowApprovalsBySowId(sowId: string): Promise<SowApproval[]>;
 }
 
 function generateSowNumber(): string {

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { sows, templates, type Sow, type Template, type InsertSow, type InsertTemplate } from "@shared/schema";
+import { sows, templates, users, workflows, sowApprovals, type Sow, type Template, type User, type Workflow, type SowApproval, type InsertSow, type InsertTemplate, type InsertUser, type InsertWorkflow, type InsertSowApproval } from "@shared/schema";
 import type { IStorage } from "./storage";
 
 export class PostgresStorage implements IStorage {
@@ -70,5 +70,76 @@ export class PostgresStorage implements IStorage {
   async deleteTemplate(id: string): Promise<boolean> {
     const result = await db.delete(templates).where(eq(templates.id, id)).returning();
     return result.length > 0;
+  }
+
+  // User methods
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return result[0];
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const result = await db.insert(users).values(user).returning();
+    return result[0];
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    const result = await db.update(users)
+      .set(updates)
+      .where(eq(users.id, id))
+      .returning();
+    
+    return result[0];
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Workflow methods
+  async getAllWorkflows(): Promise<Workflow[]> {
+    return await db.select().from(workflows);
+  }
+
+  async getWorkflowById(id: string): Promise<Workflow | undefined> {
+    const result = await db.select().from(workflows).where(eq(workflows.id, id)).limit(1);
+    return result[0];
+  }
+
+  async createWorkflow(workflow: InsertWorkflow): Promise<Workflow> {
+    const result = await db.insert(workflows).values(workflow).returning();
+    return result[0];
+  }
+
+  async updateWorkflow(id: string, updates: Partial<Workflow>): Promise<Workflow | undefined> {
+    const result = await db.update(workflows)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(workflows.id, id))
+      .returning();
+    
+    return result[0];
+  }
+
+  async deleteWorkflow(id: string): Promise<boolean> {
+    const result = await db.delete(workflows).where(eq(workflows.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // SOW Approval methods
+  async createSowApproval(approval: InsertSowApproval): Promise<SowApproval> {
+    const result = await db.insert(sowApprovals).values(approval).returning();
+    return result[0];
+  }
+
+  async getSowApprovalsBySowId(sowId: string): Promise<SowApproval[]> {
+    return await db.select().from(sowApprovals).where(eq(sowApprovals.sowId, sowId));
   }
 }
