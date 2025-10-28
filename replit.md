@@ -24,10 +24,11 @@ An enterprise-grade Statement of Work (SOW) generator application with template 
 - **Sample Data**: Pre-populated templates, SOWs, users, and workflows
 
 ### Design System
-- **Colors**: Enterprise blue/purple gradient theme (primary: `hsl(250 90% 60%)`)
+- **Colors**: Red/white/black theme (primary: `hsl(0 100% 50%)`)
 - **Typography**: Inter for body text, JetBrains Mono for code/numbers
 - **Components**: Shadcn UI with custom styling
 - **Responsive**: Mobile-first design with breakpoints
+- **Sidebar Navigation**: Enhanced with colorful icons and red active state highlighting
 
 ## Key Features
 
@@ -123,7 +124,26 @@ Uses Replit AI Integrations (OpenAI-compatible API) with GPT-4o model for conten
 - Can be replaced with Microsoft Azure AI if needed
 
 ## Recent Changes
-- **2025-10-28 (Latest)**: Enhanced Project Details Capture
+- **2025-10-28 (Latest)**: Sidebar Navigation Enhancement
+  - Added custom FileSignature icon for SOW Generator app name in red gradient box
+  - Increased menu item size (h-12 height, text-base font)
+  - Added colorful icons to each menu item (blue, green, purple, orange, pink)
+  - Implemented red active state highlighting with:
+    - 4px red left border (border-l-primary)
+    - Light red background tint (bg-primary/10)
+    - Red text and icon color for active items
+    - Semibold font weight for active items
+  - Increased spacing between menu items for better readability
+  - End-to-end tested and confirmed working
+
+- **2025-10-28**: Color Theme Update to Red/White/Black
+  - Updated entire color palette from blue/purple to red/white/black
+  - Light mode: white background, black text, red primary
+  - Dark mode: black background, white text, red primary
+  - Updated all color variables in index.css for consistency
+  - Applied theme across all pages and components
+
+- **2025-10-28**: Enhanced Project Details Capture
   - Expanded SOW schema with comprehensive project detail fields
   - Added initiative (required), deliveryPortfolio, businessOwner fields
   - Added startDate, endDate for project timeline tracking
@@ -176,11 +196,13 @@ Uses Replit AI Integrations (OpenAI-compatible API) with GPT-4o model for conten
   - Updated status badges to use semantic variants
 
 ## User Preferences
-- Professional enterprise aesthetic with blue/purple gradient
+- Professional enterprise aesthetic with red/white/black color scheme
 - Clean, card-based layouts
-- Minimal use of colors, emphasis on typography and spacing
+- Colorful, vibrant icons for visual distinction
+- Emphasis on typography and spacing
 - Consistent spacing and padding throughout
 - Responsive design for all screen sizes
+- Red highlights for active/selected states
 
 ## Running the Application
 ```bash
