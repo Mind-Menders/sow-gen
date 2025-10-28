@@ -124,7 +124,17 @@ Uses Replit AI Integrations (OpenAI-compatible API) with GPT-4o model for conten
 - Can be replaced with Microsoft Azure AI if needed
 
 ## Recent Changes
-- **2025-10-28 (Latest)**: Sidebar Navigation Enhancement
+- **2025-10-28 (Latest)**: Header Bar Removal and Sidebar Collapse Enhancement
+  - **Removed header bar** completely from authenticated app
+  - Main content now starts at the very top (no header gap)
+  - Added **SidebarRail** component for sidebar collapse via clickable edge
+  - Sidebar remains collapsible via keyboard shortcut (Ctrl+B / Cmd+B)
+  - Fixed app structure: sidebar only renders when user is authenticated
+  - Landing page now full-width without sidebar
+  - Fixed QueryClient provider hierarchy to prevent runtime errors
+  - End-to-end tested and confirmed working
+
+- **2025-10-28**: Sidebar Navigation Enhancement
   - Added custom FileSignature icon for SOW Generator app name in red gradient box
   - Increased menu item size (h-12 height, text-base font)
   - Added colorful icons to each menu item (blue, green, purple, orange, pink)
