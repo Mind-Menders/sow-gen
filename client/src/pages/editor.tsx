@@ -268,7 +268,7 @@ export default function Editor() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-[18px] pl-[1px] pr-[1px] ml-[1px] mr-[1px] pt-[1px] pb-[1px]">
           <div className="lg:col-span-1">
             <Card className="border-card-border sticky top-6">
               <CardHeader>
