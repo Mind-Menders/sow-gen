@@ -1,7 +1,7 @@
 # SOW Generator - Enterprise Edition
 
 ## Overview
-An enterprise-grade Statement of Work (SOW) generator application with template management, multi-step creation workflow, document editor, and approval tracking. Built with React, TypeScript, Express, and in-memory storage.
+An enterprise-grade Statement of Work (SOW) generator application with template management, multi-step creation workflow, document editor with AI-powered content generation, and approval tracking. Built with React, TypeScript, Express, MongoDB, and OpenAI integration.
 
 ## Project Architecture
 
@@ -12,10 +12,12 @@ An enterprise-grade Statement of Work (SOW) generator application with template 
 - **Template Library**: Reusable SOW templates
 - **Sidebar Navigation**: Main menu with user profile
 
-### Backend (Express + In-Memory Storage)
+### Backend (Express + MongoDB)
 - **SOW CRUD API**: Create, read, update, delete SOWs
 - **Template API**: Template management
+- **AI Content Generation**: OpenAI GPT-5 integration for generating section content
 - **SOW Number Generation**: Auto-generated unique identifiers
+- **MongoDB Storage**: Persistent data storage with automatic initialization
 - **Sample Data**: Pre-populated templates and SOWs
 
 ### Design System
@@ -40,10 +42,13 @@ An enterprise-grade Statement of Work (SOW) generator application with template 
 
 ### Document Editing
 - 9 standard sections per SOW
-- Real-time content editing
+- Real-time content editing with auto-save (2-second debounce)
 - Section completion tracking
-- Save functionality
-- AI Assistant panel (UI only for MVP)
+- Manual and automatic save functionality
+- AI Assistant panel with GPT-5 powered content generation
+  - Generate content suggestions based on SOW context
+  - Insert or copy AI-generated content
+  - Context-aware suggestions using project details
 
 ## Technical Details
 
@@ -61,11 +66,28 @@ An enterprise-grade Statement of Work (SOW) generator application with template 
 - `GET /api/templates` - List all templates
 - `GET /api/templates/:id` - Get specific template
 - `POST /api/templates` - Create new template
+- `POST /api/ai/generate-content` - Generate AI content for SOW sections
 
 ### Storage
-Uses in-memory storage (MemStorage) with sample data initialization. Data persists during server runtime but resets on restart.
+Uses MongoDB for persistent data storage. Falls back to in-memory storage if MONGODB_URI is not configured. Automatically initializes with sample templates and SOWs on first run.
+
+### AI Integration
+Uses Replit AI Integrations (OpenAI-compatible API) with GPT-5 model for content generation:
+- No API key required (uses Replit credits)
+- Context-aware content generation
+- Professional SOW writing expertise
+- Can be replaced with Microsoft Azure AI if needed
 
 ## Recent Changes
+- **2025-10-28 (Latest)**: MongoDB backend and AI integration
+  - Migrated from in-memory storage to MongoDB
+  - Integrated OpenAI GPT-5 for AI content generation
+  - Added auto-save functionality with 2-second debounce
+  - Implemented section-switching data protection
+  - Added comprehensive error handling for save operations
+  - Created AI Assistant panel with Insert/Copy functionality
+  - All navigation links now working (Workflow/Profile pages have placeholder UIs)
+  
 - **2025-10-28**: Initial implementation with all core features
   - Implemented dashboard with statistics and filtering
   - Built 4-step SOW creation wizard
@@ -91,11 +113,21 @@ npm run dev
 ```
 Application runs on port 5000 with both frontend (Vite) and backend (Express) served together.
 
+## Navigation
+- **Dashboard** (`/`) - Overview with statistics and SOW cards
+- **New SOW Request** (`/createsow`) - 4-step creation wizard
+- **Template Manager** (`/templates`) - Browse and manage templates
+- **Workflow Manager** (`/workflows`) - Placeholder page for approval workflows
+- **Profile Manager** (`/profilemanager`) - Placeholder page for user management
+- **Editor** (`/editor?id={sowId}`) - Document editing with AI assistance
+
 ## Future Enhancements
-- Real AI integration for content generation
-- Workflow approval system with notifications
-- Collaborative editing
+- Complete Workflow Manager implementation with approval routing
+- Complete Profile Manager with user roles and permissions
+- Collaborative editing with real-time sync
 - Version history and document comparison
 - Full-text search across SOWs
-- PostgreSQL persistence
-- User authentication and authorization
+- Azure AI integration option
+- Advanced authentication and authorization
+- Email notifications for approvals
+- Document templates customization
