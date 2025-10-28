@@ -1,12 +1,23 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { MongoStorage } from "./mongo-storage";
 import { insertSowSchema, insertTemplateSchema } from "@shared/schema";
+import { generateContentSuggestion } from "./openai";
+
+let mongoUri = process.env.MONGODB_URI || "";
+if (mongoUri && !mongoUri.startsWith("mongodb://") && !mongoUri.startsWith("mongodb+srv://")) {
+  mongoUri = `mongodb://${mongoUri}`;
+}
+
+const dbStorage = mongoUri 
+  ? new MongoStorage(mongoUri)
+  : storage;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/sows", async (req, res) => {
     try {
-      const sows = await storage.getAllSows();
+      const sows = await dbStorage.getAllSows();
       res.json(sows);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch SOWs" });
@@ -15,7 +26,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/sows/:id", async (req, res) => {
     try {
-      const sow = await storage.getSowById(req.params.id);
+      const sow = await dbStorage.getSowById(req.params.id);
       if (!sow) {
         return res.status(404).json({ error: "SOW not found" });
       }
@@ -28,7 +39,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/sows", async (req, res) => {
     try {
       const validated = insertSowSchema.parse(req.body);
-      const sow = await storage.createSow(validated);
+      const sow = await dbStorage.createSow(validated);
       res.status(201).json(sow);
     } catch (error) {
       res.status(400).json({ error: "Invalid SOW data" });
@@ -37,7 +48,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/sows/:id", async (req, res) => {
     try {
-      const sow = await storage.updateSow(req.params.id, req.body);
+      const sow = await dbStorage.updateSow(req.params.id, req.body);
       if (!sow) {
         return res.status(404).json({ error: "SOW not found" });
       }
@@ -49,7 +60,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/sows/:id", async (req, res) => {
     try {
-      const success = await storage.deleteSow(req.params.id);
+      const success = await dbStorage.deleteSow(req.params.id);
       if (!success) {
         return res.status(404).json({ error: "SOW not found" });
       }
@@ -61,7 +72,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/templates", async (req, res) => {
     try {
-      const templates = await storage.getAllTemplates();
+      const templates = await dbStorage.getAllTemplates();
       res.json(templates);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch templates" });
@@ -70,7 +81,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/templates/:id", async (req, res) => {
     try {
-      const template = await storage.getTemplateById(req.params.id);
+      const template = await dbStorage.getTemplateById(req.params.id);
       if (!template) {
         return res.status(404).json({ error: "Template not found" });
       }
@@ -83,10 +94,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/templates", async (req, res) => {
     try {
       const validated = insertTemplateSchema.parse(req.body);
-      const template = await storage.createTemplate(validated);
+      const template = await dbStorage.createTemplate(validated);
       res.status(201).json(template);
     } catch (error) {
       res.status(400).json({ error: "Invalid template data" });
+    }
+  });
+
+  app.post("/api/ai/generate-content", async (req, res) => {
+    try {
+      const { sectionTitle, sectionContent, sowId } = req.body;
+      
+      if (!sectionTitle || !sowId) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const sow = await dbStorage.getSowById(sowId);
+      if (!sow) {
+        return res.status(404).json({ error: "SOW not found" });
+      }
+
+      const suggestion = await generateContentSuggestion(
+        sectionTitle,
+        sectionContent || "",
+        {
+          title: sow.title,
+          vendorName: sow.vendorName,
+          sowType: sow.sowType,
+        }
+      );
+
+      res.json({ suggestion });
+    } catch (error) {
+      console.error("AI generation error:", error);
+      res.status(500).json({ error: "Failed to generate content" });
     }
   });
 

@@ -28,6 +28,7 @@ export default function Editor() {
   const [sections, setSections] = useState<SowSections>({});
   const [editContent, setEditContent] = useState("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState("");
   const debouncedEditContent = useDebounce(editContent, 2000);
 
   const { data: sow, isLoading } = useQuery<Sow>({
@@ -123,6 +124,33 @@ export default function Editor() {
       toast({
         title: "Auto-save failed",
         description: "Could not save your changes. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const generateAiMutation = useMutation({
+    mutationFn: async () => {
+      if (!sowId || !selectedSection || !sections[selectedSection]) return;
+      return apiRequest("POST", "/api/ai/generate-content", {
+        sowId,
+        sectionTitle: sections[selectedSection].title,
+        sectionContent: editContent,
+      });
+    },
+    onSuccess: (data: any) => {
+      if (data?.suggestion) {
+        setAiSuggestion(data.suggestion);
+        toast({
+          title: "Content Generated",
+          description: "AI has generated content suggestions for this section.",
+        });
+      }
+    },
+    onError: () => {
+      toast({
+        title: "Generation Failed",
+        description: "Could not generate AI content. Please try again.",
         variant: "destructive",
       });
     },
@@ -323,18 +351,75 @@ export default function Editor() {
                 <p className="text-sm text-muted-foreground">Generate content suggestions using AI</p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button variant="outline" className="w-full" data-testid="button-generate-ai">
+                <Button 
+                  variant="outline" 
+                  className="w-full" 
+                  onClick={() => generateAiMutation.mutate()}
+                  disabled={generateAiMutation.isPending || !selectedSection}
+                  data-testid="button-generate-ai"
+                >
                   <Sparkles className="w-4 h-4 mr-2" />
-                  Generate Content
+                  {generateAiMutation.isPending ? "Generating..." : "Generate Content"}
                 </Button>
-                <div className="text-center py-8">
-                  <p className="text-sm text-muted-foreground">No suggestions yet. Generate content to get started.</p>
-                </div>
+                
+                {aiSuggestion ? (
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-md border border-card-border bg-card">
+                      <p className="text-sm whitespace-pre-wrap">{aiSuggestion}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="default"
+                        className="flex-1"
+                        onClick={() => {
+                          setEditContent(aiSuggestion);
+                          setHasUnsavedChanges(true);
+                          setAiSuggestion("");
+                          toast({
+                            title: "Content Inserted",
+                            description: "AI suggestion has been inserted into the editor.",
+                          });
+                        }}
+                        data-testid="button-insert-ai"
+                      >
+                        Insert
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(aiSuggestion);
+                          toast({
+                            title: "Copied",
+                            description: "AI suggestion copied to clipboard.",
+                          });
+                        }}
+                        data-testid="button-copy-ai"
+                      >
+                        Copy
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => setAiSuggestion("")}
+                        data-testid="button-clear-ai"
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">No suggestions yet. Generate content to get started.</p>
+                  </div>
+                )}
+                
                 <p className="text-xs text-muted-foreground text-center border-t pt-4">
-                  Powered by AI Assistant
+                  Powered by Replit AI (OpenAI GPT-5)
                   <br />
                   <span className="text-[10px] text-muted-foreground/60 italic">
-                    [Placeholder: Replace with Microsoft Azure AI integration]
+                    [Can be replaced with Microsoft Azure AI]
                   </span>
                 </p>
               </CardContent>
