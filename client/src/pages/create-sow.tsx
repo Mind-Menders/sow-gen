@@ -1,0 +1,330 @@
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { ArrowLeft, ArrowRight, FileText, Building, FileStack, Users, Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Template } from "@shared/schema";
+
+const sowTypeOptions = [
+  {
+    value: "New Vendor (RFT)",
+    title: "New Vendor (RFT)",
+    description: "Request for Tender for engaging new vendors",
+    icon: Building,
+  },
+  {
+    value: "Existing Vendor Enhancement",
+    title: "Existing Vendor Enhancement",
+    description: "Enhancements or changes to existing vendor agreements",
+    icon: FileText,
+  },
+  {
+    value: "Flexi Sourcing - TNM",
+    title: "Flexi Sourcing - TNM",
+    description: "Time and Materials flexible sourcing model",
+    icon: FileStack,
+  },
+  {
+    value: "Flexi Sourcing - Fixed Scope",
+    title: "Flexi Sourcing - Fixed Scope",
+    description: "Fixed scope within flexible sourcing arrangement",
+    icon: Users,
+  },
+];
+
+const steps = [
+  { id: 1, title: "SOW Type", subtitle: "Select SOW category" },
+  { id: 2, title: "Project Details", subtitle: "Basic information" },
+  { id: 3, title: "Template", subtitle: "Choose starting point" },
+  { id: 4, title: "Workflow & Reviewers", subtitle: "Setup approvals" },
+];
+
+export default function CreateSOW() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [formData, setFormData] = useState({
+    sowType: "",
+    title: "",
+    vendorName: "",
+    sponsor: "",
+    templateId: "",
+  });
+
+  const { data: templates = [] } = useQuery<Template[]>({
+    queryKey: ["/api/templates"],
+  });
+
+  const createSowMutation = useMutation({
+    mutationFn: async () => {
+      const template = templates.find((t) => t.id === formData.templateId);
+      let sectionsData = "{}";
+      if (template?.sections) {
+        try {
+          const parsed = typeof template.sections === "string" ? JSON.parse(template.sections) : template.sections;
+          sectionsData = JSON.stringify(parsed);
+        } catch (e) {
+          console.error("Error parsing template sections:", e);
+        }
+      }
+      return apiRequest("POST", "/api/sows", {
+        sowType: formData.sowType,
+        title: formData.title,
+        vendorName: formData.vendorName,
+        sponsor: formData.sponsor,
+        status: "draft",
+        sections: sectionsData,
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+      toast({
+        title: "SOW Created",
+        description: "Your Statement of Work has been created successfully.",
+      });
+      setLocation(`/editor?id=${data.id}`);
+    },
+  });
+
+  const filteredTemplates = templates.filter(
+    (t) => !formData.sowType || t.sowType.toLowerCase() === formData.sowType.toLowerCase()
+  );
+
+  const canProceed = () => {
+    if (currentStep === 1) return !!formData.sowType;
+    if (currentStep === 2) return !!formData.title && !!formData.vendorName && !!formData.sponsor;
+    if (currentStep === 3) return !!formData.templateId;
+    return true;
+  };
+
+  const handleNext = () => {
+    if (currentStep < 4) {
+      setCurrentStep(currentStep + 1);
+    } else {
+      createSowMutation.mutate();
+    }
+  };
+
+  return (
+    <div className="flex-1 overflow-auto">
+      <div className="max-w-5xl mx-auto p-8 space-y-8">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => setLocation("/")} data-testid="button-back-to-dashboard">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Dashboard
+          </Button>
+        </div>
+
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold text-foreground" data-testid="text-page-title">Create New SOW</h1>
+          <p className="text-muted-foreground">Let's set up your Statement of Work</p>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex items-center flex-1">
+              <div className="flex flex-col items-center gap-2">
+                <div
+                  className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
+                    currentStep > step.id
+                      ? "bg-primary border-primary text-primary-foreground"
+                      : currentStep === step.id
+                      ? "border-primary text-primary"
+                      : "border-border text-muted-foreground"
+                  }`}
+                  data-testid={`step-indicator-${step.id}`}
+                >
+                  {currentStep > step.id ? <Check className="w-5 h-5" /> : step.id}
+                </div>
+                <div className="text-center hidden sm:block">
+                  <p className="text-xs font-medium">{step.title}</p>
+                  <p className="text-xs text-muted-foreground">{step.subtitle}</p>
+                </div>
+              </div>
+              {index < steps.length - 1 && (
+                <div className={`flex-1 h-0.5 mx-2 ${currentStep > step.id ? "bg-primary" : "bg-border"}`} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <Card className="border-card-border">
+          <CardHeader>
+            <CardTitle>{steps[currentStep - 1].title}</CardTitle>
+            <CardDescription>{steps[currentStep - 1].subtitle}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {currentStep === 1 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold mb-4">Select SOW Type</h3>
+                <p className="text-sm text-muted-foreground mb-6">Choose the category that best fits your needs</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {sowTypeOptions.map((option) => {
+                    const Icon = option.icon;
+                    const isSelected = formData.sowType === option.value;
+                    return (
+                      <Card
+                        key={option.value}
+                        className={`cursor-pointer border-2 transition-all hover-elevate ${
+                          isSelected ? "border-primary bg-accent" : "border-card-border"
+                        }`}
+                        onClick={() => setFormData({ ...formData, sowType: option.value })}
+                        data-testid={`card-sow-type-${option.value.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                      >
+                        <CardHeader>
+                          <Icon className="w-8 h-8 text-primary mb-2" />
+                          <CardTitle className="text-base">{option.title}</CardTitle>
+                          <CardDescription className="text-sm">{option.description}</CardDescription>
+                        </CardHeader>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Project Title *</Label>
+                  <Input
+                    id="title"
+                    placeholder="Enter project title"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    data-testid="input-title"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vendor">Vendor Name *</Label>
+                  <Input
+                    id="vendor"
+                    placeholder="Enter vendor name"
+                    value={formData.vendorName}
+                    onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
+                    data-testid="input-vendor"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sponsor">Sponsor *</Label>
+                  <Input
+                    id="sponsor"
+                    placeholder="Enter sponsor name"
+                    value={formData.sponsor}
+                    onChange={(e) => setFormData({ ...formData, sponsor: e.target.value })}
+                    data-testid="input-sponsor"
+                  />
+                </div>
+              </div>
+            )}
+
+            {currentStep === 3 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold mb-4">Select Template</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Choose a starting template for your SOW
+                </p>
+                <div className="grid grid-cols-1 gap-4">
+                  {filteredTemplates.map((template) => {
+                    const isSelected = formData.templateId === template.id;
+                    return (
+                      <Card
+                        key={template.id}
+                        className={`cursor-pointer border-2 transition-all hover-elevate ${
+                          isSelected ? "border-primary bg-accent" : "border-card-border"
+                        }`}
+                        onClick={() => setFormData({ ...formData, templateId: template.id })}
+                        data-testid={`card-template-${template.id}`}
+                      >
+                        <CardHeader>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              {template.isOfficial === "true" && (
+                                <Badge variant="secondary" className="mb-2 text-xs">official</Badge>
+                              )}
+                              <CardTitle className="text-base mb-2">{template.name}</CardTitle>
+                              <CardDescription className="text-sm">{template.description}</CardDescription>
+                              <Badge variant="outline" className="mt-3 text-xs">{template.sowType}</Badge>
+                            </div>
+                          </div>
+                        </CardHeader>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {currentStep === 4 && (
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="workflow">Workflow</Label>
+                  <Select defaultValue="standard">
+                    <SelectTrigger data-testid="select-workflow">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="standard">Standard Approval</SelectItem>
+                      <SelectItem value="fast">Fast Track</SelectItem>
+                      <SelectItem value="comprehensive">Comprehensive Review</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reviewers">Reviewers (Optional)</Label>
+                  <Input
+                    id="reviewers"
+                    placeholder="Add reviewer emails (comma-separated)"
+                    data-testid="input-reviewers"
+                  />
+                  <p className="text-xs text-muted-foreground">Reviewers will be notified when the SOW is ready for approval</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-between">
+          <Button
+            variant="outline"
+            onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+            disabled={currentStep === 1}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <Button
+            onClick={handleNext}
+            disabled={!canProceed() || createSowMutation.isPending}
+            data-testid="button-next"
+          >
+            {createSowMutation.isPending ? (
+              "Creating..."
+            ) : currentStep === 4 ? (
+              "Create SOW"
+            ) : (
+              <>
+                Next
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

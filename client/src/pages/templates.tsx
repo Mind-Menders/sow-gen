@@ -1,0 +1,78 @@
+import { useQuery } from "@tanstack/react-query";
+import { FileStack, Eye, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import type { Template } from "@shared/schema";
+
+export default function Templates() {
+  const { data: templates = [], isLoading } = useQuery<Template[]>({
+    queryKey: ["/api/templates"],
+  });
+
+  return (
+    <div className="flex-1 overflow-auto">
+      <div className="max-w-7xl mx-auto p-8 space-y-8">
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold text-foreground" data-testid="text-page-title">Template Library</h1>
+            <p className="text-muted-foreground">Manage SOW templates for faster document creation</p>
+          </div>
+          <Button className="gap-2" data-testid="button-create-template">
+            <Plus className="w-4 h-4" />
+            Create Template
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="border-card-border">
+                <CardHeader className="space-y-3">
+                  <div className="h-4 bg-muted rounded animate-pulse w-20" />
+                  <div className="h-6 bg-muted rounded animate-pulse w-3/4" />
+                  <div className="h-4 bg-muted rounded animate-pulse" />
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        ) : templates.length === 0 ? (
+          <Card className="border-card-border">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <FileStack className="w-16 h-16 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No templates found</h3>
+              <p className="text-muted-foreground mb-6">Create your first template to get started</p>
+              <Button data-testid="button-create-first-template">
+                <Plus className="w-4 h-4 mr-2" />
+                Create Template
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {templates.map((template) => (
+              <Card key={template.id} className="border-card-border hover-elevate group" data-testid={`card-template-${template.id}`}>
+                <CardHeader className="space-y-3">
+                  {template.isOfficial === "true" && (
+                    <Badge variant="secondary" className="w-fit uppercase text-xs font-semibold">
+                      official
+                    </Badge>
+                  )}
+                  <CardTitle className="text-lg" data-testid={`text-template-name-${template.id}`}>{template.name}</CardTitle>
+                  <CardDescription className="text-sm line-clamp-2">{template.description}</CardDescription>
+                  <Badge variant="outline" className="w-fit text-xs lowercase">{template.sowType}</Badge>
+                </CardHeader>
+                <CardContent>
+                  <Button variant="outline" className="w-full gap-2" data-testid={`button-preview-${template.id}`}>
+                    <Eye className="w-4 h-4" />
+                    Preview
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
