@@ -330,7 +330,13 @@ export default function Editor() {
                 <div className="text-center py-8">
                   <p className="text-sm text-muted-foreground">No suggestions yet. Generate content to get started.</p>
                 </div>
-                <p className="text-xs text-muted-foreground text-center border-t pt-4">Powered by AI Assistant</p>
+                <p className="text-xs text-muted-foreground text-center border-t pt-4">
+                  Powered by AI Assistant
+                  <br />
+                  <span className="text-[10px] text-muted-foreground/60 italic">
+                    [Placeholder: Replace with Microsoft Azure AI integration]
+                  </span>
+                </p>
               </CardContent>
             </Card>
           </div>

@@ -44,6 +44,8 @@ export const insertSowSchema = createInsertSchema(sows).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).partial({
+  sowNumber: true,
 });
 
 export const insertTemplateSchema = createInsertSchema(templates).omit({
