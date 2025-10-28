@@ -72,24 +72,45 @@ An enterprise-grade Statement of Work (SOW) generator application with template 
 ## Technical Details
 
 ### Data Models
+- **Session**: sid (PK), sess (JSON), expire (for Replit Auth session storage)
 - **SOW**: id, sowNumber, title, vendorName, sponsor, sowType, status, workflowId, sections, timestamps
 - **Template**: id, name, description, sowType, isOfficial, sections, createdAt
-- **User**: id, name, email, role, department, isActive, createdAt
+- **User**: id, name, email, firstName, lastName, profileImageUrl, role, department, isActive, createdAt, updatedAt
 - **Workflow**: id, name, description, sowTypes (JSON), stages (JSON), isActive, timestamps
 - **WorkflowStage**: id, name, reviewerIds (array), requireAll (boolean)
 - **SowApproval**: id, sowId, workflowId, currentStage, reviewerId, status, comments, timestamps
 - **Section**: id, icon, title, content
 
 ### API Endpoints
-- `GET /api/sows` - List all SOWs
-- `GET /api/sows/:id` - Get specific SOW
-- `POST /api/sows` - Create new SOW
-- `PATCH /api/sows/:id` - Update SOW
-- `DELETE /api/sows/:id` - Delete SOW
-- `GET /api/templates` - List all templates
-- `GET /api/templates/:id` - Get specific template
-- `POST /api/templates` - Create new template
-- `POST /api/ai/generate-content` - Generate AI content for SOW sections
+- **Authentication**
+  - `GET /api/login` - Initiate Replit Auth login flow
+  - `GET /api/logout` - Log out and end session
+  - `GET /api/callback` - OAuth callback endpoint
+  - `GET /api/auth/user` - Get current authenticated user
+- **SOWs**
+  - `GET /api/sows` - List all SOWs
+  - `GET /api/sows/:id` - Get specific SOW
+  - `POST /api/sows` - Create new SOW
+  - `PATCH /api/sows/:id` - Update SOW
+  - `DELETE /api/sows/:id` - Delete SOW
+- **Templates**
+  - `GET /api/templates` - List all templates
+  - `GET /api/templates/:id` - Get specific template
+  - `POST /api/templates` - Create new template
+- **AI**
+  - `POST /api/ai/generate-content` - Generate AI content for SOW sections
+- **Users**
+  - `GET /api/users` - List all users
+  - `GET /api/users/:id` - Get specific user
+  - `POST /api/users` - Create new user
+  - `PATCH /api/users/:id` - Update user
+  - `DELETE /api/users/:id` - Delete user
+- **Workflows**
+  - `GET /api/workflows` - List all workflows
+  - `GET /api/workflows/:id` - Get specific workflow
+  - `POST /api/workflows` - Create new workflow
+  - `PATCH /api/workflows/:id` - Update workflow
+  - `DELETE /api/workflows/:id` - Delete workflow
 
 ### Storage
 Uses PostgreSQL for persistent data storage via Drizzle ORM. Falls back to in-memory storage if DATABASE_URL is not configured. Automatically initializes with sample templates, SOWs, users, and workflows on first run.
@@ -102,7 +123,20 @@ Uses Replit AI Integrations (OpenAI-compatible API) with GPT-4o model for conten
 - Can be replaced with Microsoft Azure AI if needed
 
 ## Recent Changes
-- **2025-10-28 (Latest)**: Complete Workflow Manager, Profile Manager, and approval system
+- **2025-10-28 (Latest)**: User Authentication with Replit Auth and Vibrant UI Enhancements
+  - Implemented complete Replit Auth integration for user authentication
+    - Added sessions table for session storage
+    - Updated users table with firstName, lastName, profileImageUrl, updatedAt for auth
+    - Created useAuth hook for frontend authentication state
+    - Implemented OpenID Connect authentication flow with Replit
+    - Added /api/login, /api/logout, /api/callback, /api/auth/user endpoints
+    - Created Landing page for logged-out users with features overview
+    - Updated App.tsx to handle auth flow (Landing when logged out, main app when logged in)
+    - Fixed critical storage issue: auth now uses same storage instance (PostgresStorage)
+  - Added vibrant backgrounds with gradient overlays to Dashboard, Workflows, and Profile Manager
+  - Icons already present on buttons and key UI elements throughout application
+  
+- **2025-10-28**: Complete Workflow Manager, Profile Manager, and approval system
   - Built complete Workflow Manager page with multi-stage approval configuration UI
   - Implemented full user management in Profile Manager (CRUD operations, roles, departments)
   - Integrated workflow selection into SOW creation wizard step 4
