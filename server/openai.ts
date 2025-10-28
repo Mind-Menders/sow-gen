@@ -31,20 +31,31 @@ Please generate professional, detailed content for this section of the SOW. The 
 
 Generate the content in plain text format (no markdown), ready to be inserted into the document.`;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-    messages: [
-      {
-        role: "system",
-        content: "You are an expert SOW writer who creates professional, detailed content for enterprise Statement of Work documents."
-      },
-      {
-        role: "user",
-        content: prompt
-      }
-    ],
-    max_completion_tokens: 1024,
-  });
+  try {
+    console.log("[AI] Generating content for section:", sectionTitle);
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // Latest OpenAI model available in Replit AI Integrations
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert SOW writer who creates professional, detailed content for enterprise Statement of Work documents."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_completion_tokens: 1024,
+    });
 
-  return response.choices[0]?.message?.content || "";
+    const content = response.choices[0]?.message?.content || "";
+    console.log("[AI] Response length:", content.length, "characters");
+    if (!content) {
+      console.warn("[AI] Empty response from OpenAI");
+    }
+    return content;
+  } catch (error) {
+    console.error("[AI] Error calling OpenAI:", error);
+    throw error;
+  }
 }
