@@ -73,7 +73,7 @@ An enterprise-grade Statement of Work (SOW) generator application with template 
 
 ### Data Models
 - **Session**: sid (PK), sess (JSON), expire (for Replit Auth session storage)
-- **SOW**: id, sowNumber, title, vendorName, sponsor, sowType, status, workflowId, sections, timestamps
+- **SOW**: id, sowNumber, title, initiative, deliveryPortfolio, vendorName, sponsor, businessOwner, startDate, endDate, budget, currency, sowType, status, workflowId, sections, timestamps
 - **Template**: id, name, description, sowType, isOfficial, sections, createdAt
 - **User**: id, name, email, firstName, lastName, profileImageUrl, role, department, isActive, createdAt, updatedAt
 - **Workflow**: id, name, description, sowTypes (JSON), stages (JSON), isActive, timestamps
@@ -123,7 +123,16 @@ Uses Replit AI Integrations (OpenAI-compatible API) with GPT-4o model for conten
 - Can be replaced with Microsoft Azure AI if needed
 
 ## Recent Changes
-- **2025-10-28 (Latest)**: User Authentication with Replit Auth and Vibrant UI Enhancements
+- **2025-10-28 (Latest)**: Enhanced Project Details Capture
+  - Expanded SOW schema with comprehensive project detail fields
+  - Added initiative (required), deliveryPortfolio, businessOwner fields
+  - Added startDate, endDate for project timeline tracking
+  - Added budget (decimal support) and currency (default USD) fields
+  - Updated Create SOW wizard step 2 with two-column responsive layout
+  - All fields properly validated and persisted to PostgreSQL
+  - End-to-end tested and confirmed working
+
+- **2025-10-28**: User Authentication with Replit Auth and Vibrant UI Enhancements
   - Implemented complete Replit Auth integration for user authentication
     - Added sessions table for session storage
     - Updated users table with firstName, lastName, profileImageUrl, updatedAt for auth
