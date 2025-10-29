@@ -1,11 +1,15 @@
-import { FileText, Workflow, Users, CheckCircle, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { FileText, Workflow, Users, CheckCircle, ArrowRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LoginForm } from "@/components/login-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import bgImage from "@assets/stock_images/abstract_blue_purple_8c94cc67.jpg";
 
 export default function Landing() {
+  const [showLogin, setShowLogin] = useState(false);
+
   const handleLogin = () => {
-    window.location.href = "/api/login";
+    setShowLogin(true);
   };
 
   return (
@@ -15,6 +19,25 @@ export default function Landing() {
         style={{ backgroundImage: `url(${bgImage})` }}
       />
       <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/20" />
+      
+      {showLogin && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Welcome Back</CardTitle>
+                <CardDescription>Sign in to your account to continue</CardDescription>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setShowLogin(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <LoginForm onClose={() => setShowLogin(false)} />
+            </CardContent>
+          </Card>
+        </div>
+      )}
       
       <div className="relative min-h-screen flex flex-col">
         <header className="flex items-center justify-between p-6">

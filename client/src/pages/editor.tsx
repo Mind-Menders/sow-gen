@@ -416,7 +416,7 @@ export default function Editor() {
                 )}
                 
                 <p className="text-xs text-muted-foreground text-center border-t pt-4">
-                  Powered by Replit AI (OpenAI GPT-5)
+                  Powered by OpenAI GPT-5
                   <br />
                   <span className="text-[10px] text-muted-foreground/60 italic">
                     [Can be replaced with Microsoft Azure AI]
