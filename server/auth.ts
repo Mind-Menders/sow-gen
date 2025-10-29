@@ -7,7 +7,7 @@ let MongoUser: any = null;
 try {
   if (process.env.MONGODB_URI) {
     usesMongo = true;
-    const mongo = await import("./mongodb-migration");
+  const mongo = await import("./archive-migrations/mongodb-migration");
     await mongo.connectToMongo();
     MongoUser = mongo.User;
     console.log("Auth: using MongoDB for user storage");

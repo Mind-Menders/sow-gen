@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import { connectToMongo, User, Template, Workflow } from './mongodb';
-import * as schema from '../shared/schema';
+import { connectToMongo, User, Template, Workflow } from '../mongodb';
+import * as schema from '../../shared/schema';
 
 async function migrateData() {
   const pool = new Pool({

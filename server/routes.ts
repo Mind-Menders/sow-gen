@@ -9,10 +9,26 @@ let dbStorage: IStorage = storage;
 
 // Initialize PostgreSQL storage if DATABASE_URL is available
 async function initializeStorage() {
+  // Prefer MongoDB if configured
+  if (process.env.MONGODB_URI) {
+    try {
+      const { MongoStorage } = await import("./mongo-storage");
+      const mongoStorage = new MongoStorage(process.env.MONGODB_URI);
+      // Test connection by fetching templates (this will also initialize defaults)
+      await mongoStorage.getAllTemplates();
+  dbStorage = mongoStorage as unknown as IStorage;
+      console.log("[storage] Using MongoDB storage");
+      return;
+    } catch (error) {
+      console.warn("[storage] MongoDB connection failed, falling back to other storage:", error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  // If no MongoDB or it failed, try PostgreSQL
   if (process.env.DATABASE_URL) {
     try {
-      const { PostgresStorage } = await import("./postgres-storage");
-      const { seedDatabase } = await import("./seed");
+  const { PostgresStorage } = await import("./postgres-storage");
+  const { seedDatabase } = await import("./archive-migrations/seed");
 
       const postgresStorage = new PostgresStorage();
       // Test connection
@@ -22,13 +38,15 @@ async function initializeStorage() {
       
       // Seed database with sample data
       await seedDatabase();
+      return;
     } catch (error) {
       console.warn("[storage] PostgreSQL connection failed, using in-memory storage:", error instanceof Error ? error.message : String(error));
       dbStorage = storage;
+      return;
     }
-  } else {
-    console.log("[storage] Using in-memory storage (no DATABASE_URL configured)");
   }
+
+  console.log("[storage] Using in-memory storage (no DATABASE_URL or MONGODB_URI configured)");
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -66,17 +84,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If a workflow is assigned, create an initial approval record
       if (sow.workflowId) {
-        await dbStorage.createSowApproval({
-          sowId: sow.id,
-          workflowId: sow.workflowId,
-          currentStage: 0,
-          status: "pending",
-        });
+        try {
+          await dbStorage.createSowApproval({
+            sowId: sow.id,
+            workflowId: sow.workflowId,
+            currentStage: 0,
+            status: "pending",
+          });
+        } catch (approvalErr) {
+          // Log and continue — approval creation failing should not block SOW creation
+          console.warn("Failed to create sow approval:", approvalErr instanceof Error ? approvalErr.message : String(approvalErr));
+        }
       }
-      
+
       res.status(201).json(sow);
     } catch (error) {
-      res.status(400).json({ error: "Invalid SOW data" });
+      if (error instanceof Error) {
+        // Try to show validation errors (Zod) if present
+        let message = error.message || "Invalid SOW data";
+        if ((error as any).name === "ZodError") {
+          try {
+            const zodError = JSON.parse(error.message);
+            message = zodError.map((err: any) => `${err.path.join('.')}: ${err.message}`).join(', ');
+          } catch {
+            // leave message as-is
+          }
+        }
+        res.status(400).json({ error: message });
+      } else {
+        res.status(400).json({ error: "Invalid SOW data" });
+      }
     }
   });
 
@@ -151,7 +188,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await dbStorage.createUser(validated);
       res.status(201).json(user);
     } catch (error) {
-      res.status(400).json({ error: "Invalid user data" });
+      if (error instanceof Error) {
+        res.status(400).json({ error: error.message });
+      } else {
+        if (error instanceof Error) {
+        let message = error.message || "Invalid user data";
+        // Enhance Zod validation error message
+        if (error.name === "ZodError") {
+          try {
+            const zodError = JSON.parse(error.message);
+            message = zodError.map((err: any) => `${err.path.join('.')}: ${err.message}`).join(', ');
+          } catch {
+            // Keep original message if parsing fails
+          }
+        }
+        res.status(400).json({ error: message });
+      } else {
+        res.status(400).json({ error: "Invalid user data" });
+      }
+      }
     }
   });
 
@@ -195,7 +250,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const workflow = await dbStorage.createWorkflow(validated);
       res.status(201).json(workflow);
     } catch (error) {
-      res.status(400).json({ error: "Invalid workflow data" });
+      if (error instanceof Error) {
+        res.status(400).json({ error: error.message });
+      } else {
+        if (error instanceof Error) {
+        let message = error.message || "Invalid workflow data";
+        // Enhance Zod validation error message
+        if (error.name === "ZodError") {
+          try {
+            const zodError = JSON.parse(error.message);
+            message = zodError.map((err: any) => `${err.path.join('.')}: ${err.message}`).join(', ');
+          } catch {
+            // Keep original message if parsing fails
+          }
+        }
+        res.status(400).json({ error: message });
+      } else {
+        res.status(400).json({ error: "Invalid workflow data" });
+      }
+      }
     }
   });
 

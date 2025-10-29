@@ -1,5 +1,5 @@
 import { MongoClient, Db, Collection, ObjectId } from "mongodb";
-import { type Sow, type InsertSow, type Template, type InsertTemplate } from "@shared/schema";
+import { type Sow, type InsertSow, type Template, type InsertTemplate, type User, type InsertUser, type UpsertUser, type Workflow, type InsertWorkflow, type SowApproval, type InsertSowApproval } from "@shared/schema";
 import { type IStorage } from "./storage";
 
 function generateSowNumber(): string {
@@ -69,10 +69,18 @@ interface MongoSow {
   sowNumber: string;
   title: string;
   vendorName: string;
-  sponsor: string;
+  sponsor?: string | null;
   sowType: string;
   status: string;
   sections: string;
+  initiative?: string | null;
+  deliveryPortfolio?: string | null;
+  businessOwner?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  budget?: string | null;
+  currency?: string | null;
+  workflowId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -87,11 +95,52 @@ interface MongoTemplate {
   createdAt: Date;
 }
 
+interface MongoUser {
+  _id: ObjectId;
+  name: string;
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  profileImageUrl: string;
+  role: string;
+  department: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface MongoWorkflow {
+  _id: ObjectId;
+  name: string;
+  description: string;
+  sowTypes: string;
+  stages: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface MongoSowApproval {
+  _id: ObjectId;
+  sowId: string;
+  workflowId: string | null;
+  currentStage: number;
+  reviewerId: string | null;
+  status: string;
+  comments: string | null;
+  reviewedAt: Date | null;
+  createdAt: Date;
+}
+
 export class MongoStorage implements IStorage {
   private client: MongoClient;
   private db: Db | null = null;
   private sowsCollection: Collection<MongoSow> | null = null;
   private templatesCollection: Collection<MongoTemplate> | null = null;
+  private usersCollection: Collection<MongoUser> | null = null;
+  private workflowsCollection: Collection<MongoWorkflow> | null = null;
+  private approvalsCollection: Collection<MongoSowApproval> | null = null;
   private connected: boolean = false;
 
   constructor(uri: string) {
@@ -105,18 +154,21 @@ export class MongoStorage implements IStorage {
     this.db = this.client.db("sow_generator");
     this.sowsCollection = this.db.collection<MongoSow>("sows");
     this.templatesCollection = this.db.collection<MongoTemplate>("templates");
+    this.usersCollection = this.db.collection<MongoUser>("users");
+    this.workflowsCollection = this.db.collection<MongoWorkflow>("workflows");
+  this.approvalsCollection = this.db.collection<MongoSowApproval>("sow_approvals");
     this.connected = true;
 
     await this.initializeDefaultData();
   }
 
+
   private async initializeDefaultData(): Promise<void> {
-    if (!this.templatesCollection || !this.sowsCollection) return;
+    if (!this.templatesCollection || !this.sowsCollection || !this.usersCollection || !this.workflowsCollection) return;
 
     const templateCount = await this.templatesCollection.countDocuments();
-    if (templateCount > 0) return;
-
-    const templates = [
+    if (templateCount === 0) {
+      const templates = [
       {
         _id: new ObjectId(),
         name: "Standard RFT Template",
@@ -146,8 +198,7 @@ export class MongoStorage implements IStorage {
       },
     ];
 
-    await this.templatesCollection.insertMany(templates);
-
+      await this.templatesCollection.insertMany(templates);
     const sampleSections1 = {
       ...defaultSections,
       "executive-summary": {
@@ -199,7 +250,98 @@ export class MongoStorage implements IStorage {
       },
     ];
 
-    await this.sowsCollection.insertMany(sows);
+      await this.sowsCollection.insertMany(sows);
+    }
+
+    // Seed users if empty
+    const userCount = await this.usersCollection.countDocuments();
+    if (userCount === 0) {
+      const users = [
+        {
+          _id: new ObjectId(),
+          name: "Sarah Johnson",
+          email: "sarah.johnson@company.com",
+          password: "",
+          firstName: "Sarah",
+          lastName: "Johnson",
+          role: "manager",
+          profileImageUrl: "",
+          department: "",
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          _id: new ObjectId(),
+          name: "Michael Chen",
+          email: "michael.chen@company.com",
+          password: "",
+          firstName: "Michael",
+          lastName: "Chen",
+          role: "reviewer",
+          profileImageUrl: "",
+          department: "",
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          _id: new ObjectId(),
+          name: "Emily Davis",
+          email: "emily.davis@company.com",
+          password: "",
+          firstName: "Emily",
+          lastName: "Davis",
+          role: "reviewer",
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          _id: new ObjectId(),
+          name: "John Smith",
+          email: "john.smith@company.com",
+          password: "",
+          firstName: "John",
+          lastName: "Smith",
+          role: "admin",
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+
+      await this.usersCollection.insertMany(users as any);
+    }
+
+    // Seed workflows if empty
+    const workflowCount = await this.workflowsCollection.countDocuments();
+    if (workflowCount === 0) {
+      const workflows = [
+        {
+          _id: new ObjectId(),
+          name: "Standard Approval",
+          description: "Standard multi-stage approval workflow",
+          sowTypes: "New Vendor (RFT)",
+          stages: JSON.stringify([]),
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          _id: new ObjectId(),
+          name: "Quick Review",
+          description: "Two-stage quick review workflow",
+          sowTypes: "Existing Vendor Enhancement",
+          stages: JSON.stringify([]),
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+
+      await this.workflowsCollection.insertMany(workflows);
+    }
   }
 
   private mongoSowToSow(mongoSow: MongoSow): Sow {
@@ -301,6 +443,208 @@ export class MongoStorage implements IStorage {
     };
     await this.templatesCollection!.insertOne(mongoTemplate);
     return this.mongoTemplateToTemplate(mongoTemplate);
+  }
+
+  private mongoUserToUser(mongoUser: MongoUser): User {
+    return {
+      id: mongoUser._id.toHexString(),
+      name: mongoUser.name || "",
+      email: mongoUser.email || "",
+      password: mongoUser.password || "",
+      firstName: mongoUser.firstName || "",
+      lastName: mongoUser.lastName || "",
+      profileImageUrl: mongoUser.profileImageUrl || "",
+      role: mongoUser.role || "user",
+      department: mongoUser.department || "",
+      isActive: mongoUser.isActive ?? true,
+      createdAt: mongoUser.createdAt,
+      updatedAt: mongoUser.updatedAt,
+    };
+  }
+
+  private mongoWorkflowToWorkflow(mongoWorkflow: MongoWorkflow): Workflow {
+    return {
+      id: mongoWorkflow._id.toHexString(),
+      name: mongoWorkflow.name,
+      description: mongoWorkflow.description,
+      sowTypes: mongoWorkflow.sowTypes,
+      stages: mongoWorkflow.stages,
+      isActive: mongoWorkflow.isActive,
+      createdAt: mongoWorkflow.createdAt,
+      updatedAt: mongoWorkflow.updatedAt,
+    };
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    await this.ensureConnected();
+    const mongoUsers = await this.usersCollection!.find().sort({ createdAt: -1 }).toArray();
+    return mongoUsers.map((u) => this.mongoUserToUser(u));
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    await this.ensureConnected();
+    const mongoUser = await this.usersCollection!.findOne({ _id: new ObjectId(id) });
+    return mongoUser ? this.mongoUserToUser(mongoUser) : undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    await this.ensureConnected();
+    const mongoUser = await this.usersCollection!.findOne({ email });
+    return mongoUser ? this.mongoUserToUser(mongoUser) : undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    await this.ensureConnected();
+    const now = new Date();
+    const mongoUser: MongoUser = {
+      _id: new ObjectId(),
+      name: insertUser.name || "",
+      email: insertUser.email || "",
+      password: insertUser.password || "",
+      firstName: insertUser.firstName || "",
+      lastName: insertUser.lastName || "",
+      profileImageUrl: insertUser.profileImageUrl || "",
+      role: insertUser.role || 'user',
+      department: insertUser.department || "",
+      isActive: insertUser.isActive ?? true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.usersCollection!.insertOne(mongoUser);
+    return this.mongoUserToUser(mongoUser);
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    await this.ensureConnected();
+    return this.getUserById(id);
+  }
+
+  async upsertUser(user: UpsertUser): Promise<User> {
+    await this.ensureConnected();
+    const now = new Date();
+    const _id = user.id ? new ObjectId(user.id) : new ObjectId();
+    const mongoUser: MongoUser = {
+      _id,
+      name: user.name || "",
+      email: user.email || "",
+      password: user.password || "",
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      profileImageUrl: user.profileImageUrl || "",
+      role: user.role || "user",
+      department: user.department || "",
+      isActive: user.isActive ?? true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.usersCollection!.updateOne({ _id }, { $set: mongoUser }, { upsert: true });
+    return this.mongoUserToUser(mongoUser);
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    await this.ensureConnected();
+    const result = await this.usersCollection!.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: { ...(updates as any), updatedAt: new Date() } as any },
+      { returnDocument: "after" }
+    );
+    return result ? this.mongoUserToUser(result) : undefined;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    await this.ensureConnected();
+    const result = await this.usersCollection!.deleteOne({ _id: new ObjectId(id) });
+    return result.deletedCount > 0;
+  }
+
+  async getAllWorkflows(): Promise<Workflow[]> {
+    await this.ensureConnected();
+    const mongoWorkflows = await this.workflowsCollection!.find().sort({ createdAt: -1 }).toArray();
+    return mongoWorkflows.map((w) => this.mongoWorkflowToWorkflow(w));
+  }
+
+  async getWorkflowById(id: string): Promise<Workflow | undefined> {
+    await this.ensureConnected();
+    const mongoWorkflow = await this.workflowsCollection!.findOne({ _id: new ObjectId(id) });
+    return mongoWorkflow ? this.mongoWorkflowToWorkflow(mongoWorkflow) : undefined;
+  }
+
+  async createWorkflow(insertWorkflow: InsertWorkflow): Promise<Workflow> {
+    await this.ensureConnected();
+    const now = new Date();
+    const mongoWorkflow: MongoWorkflow = {
+      _id: new ObjectId(),
+      name: insertWorkflow.name,
+      description: insertWorkflow.description,
+      sowTypes: insertWorkflow.sowTypes,
+      stages: insertWorkflow.stages || '[]',
+      isActive: insertWorkflow.isActive ?? true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.workflowsCollection!.insertOne(mongoWorkflow);
+    return this.mongoWorkflowToWorkflow(mongoWorkflow);
+  }
+
+  async updateWorkflow(id: string, updates: Partial<InsertWorkflow>): Promise<Workflow | undefined> {
+    await this.ensureConnected();
+    const result = await this.workflowsCollection!.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: { ...updates, updatedAt: new Date() } },
+      { returnDocument: "after" }
+    );
+    return result ? this.mongoWorkflowToWorkflow(result) : undefined;
+  }
+
+  async deleteWorkflow(id: string): Promise<boolean> {
+    await this.ensureConnected();
+    const result = await this.workflowsCollection!.deleteOne({ _id: new ObjectId(id) });
+    return result.deletedCount > 0;
+  }
+
+  // Approval methods
+  async createSowApproval(approval: InsertSowApproval): Promise<SowApproval> {
+    await this.ensureConnected();
+    const now = new Date();
+    const mongoApproval = {
+      _id: new ObjectId(),
+      sowId: approval.sowId,
+      workflowId: approval.workflowId || null,
+      currentStage: approval.currentStage,
+      reviewerId: approval.reviewerId || null,
+      status: approval.status,
+      comments: approval.comments || null,
+      reviewedAt: approval.reviewedAt || null,
+      createdAt: now,
+    } as any;
+    await this.approvalsCollection!.insertOne(mongoApproval);
+    return {
+      id: mongoApproval._id.toHexString(),
+      sowId: mongoApproval.sowId,
+      workflowId: mongoApproval.workflowId,
+      currentStage: mongoApproval.currentStage,
+      reviewerId: mongoApproval.reviewerId,
+      status: mongoApproval.status,
+      comments: mongoApproval.comments,
+      reviewedAt: mongoApproval.reviewedAt,
+      createdAt: mongoApproval.createdAt,
+    } as SowApproval;
+  }
+
+  async getSowApprovalsBySowId(sowId: string): Promise<SowApproval[]> {
+    await this.ensureConnected();
+    const mongoApprovals = await this.approvalsCollection!.find({ sowId }).sort({ createdAt: -1 }).toArray();
+    return mongoApprovals.map((a: any) => ({
+      id: a._id.toHexString(),
+      sowId: a.sowId,
+      workflowId: a.workflowId,
+      currentStage: a.currentStage,
+      reviewerId: a.reviewerId,
+      status: a.status,
+      comments: a.comments,
+      reviewedAt: a.reviewedAt,
+      createdAt: a.createdAt,
+    }));
   }
 
   async close(): Promise<void> {

@@ -42,10 +42,11 @@ export default function ProfileManager() {
         description: "The user has been added successfully.",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
+      const errorMessage = error?.message || "Failed to create user. Email may already exist.";
       toast({
         title: "Error",
-        description: "Failed to create user. Email may already exist.",
+        description: errorMessage,
         variant: "destructive",
       });
     },

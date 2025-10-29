@@ -31,6 +31,14 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
+// Prevent caching on API responses to avoid 304 Not Modified responses from confusing the client
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -86,7 +94,8 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen(port, "localhost", () => {
+  // Bind to all interfaces to avoid IPv4/IPv6 localhost resolution issues on some systems
+  server.listen(port, () => {
     log(`serving on http://localhost:${port}`);
   });
 })();

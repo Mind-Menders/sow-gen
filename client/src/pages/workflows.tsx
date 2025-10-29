@@ -25,23 +25,36 @@ export default function Workflows() {
     stages: [] as WorkflowStage[],
   });
 
-  const { data: workflows = [] } = useQuery<WorkflowType[]>({
+  const { data: workflows = [], error: workflowsError, isLoading: isWorkflowsLoading } = useQuery<WorkflowType[]>({
     queryKey: ["/api/workflows"],
   });
 
-  const { data: users = [] } = useQuery<User[]>({
+  if (workflowsError) {
+    console.error('Workflows error:', workflowsError);
+  }
+
+  const { data: users = [], error: usersError } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
 
+  if (usersError) {
+    console.error('Users error:', usersError);
+  }
+
   const createWorkflowMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/workflows", {
-        name: formData.name,
-        description: formData.description,
-        sowTypes: JSON.stringify(formData.sowTypes),
-        stages: JSON.stringify(formData.stages),
-        isActive: true,
-      });
+      try {
+        return await apiRequest("POST", "/api/workflows", {
+          name: formData.name,
+          description: formData.description,
+          sowTypes: JSON.stringify(formData.sowTypes),
+          stages: JSON.stringify(formData.stages),
+          isActive: true,
+        });
+      } catch (error) {
+        console.error('Error creating workflow:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workflows"] });
@@ -52,17 +65,30 @@ export default function Workflows() {
         description: "The workflow has been created successfully.",
       });
     },
+    onError: (error: any) => {
+      const errorMessage = error?.message || "Failed to create workflow";
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    },
   });
 
   const updateWorkflowMutation = useMutation({
     mutationFn: async () => {
       if (!editingWorkflow) return;
-      return apiRequest("PATCH", `/api/workflows/${editingWorkflow.id}`, {
-        name: formData.name,
-        description: formData.description,
-        sowTypes: JSON.stringify(formData.sowTypes),
-        stages: JSON.stringify(formData.stages),
-      });
+      try {
+        return await apiRequest("PATCH", `/api/workflows/${editingWorkflow.id}`, {
+          name: formData.name,
+          description: formData.description,
+          sowTypes: JSON.stringify(formData.sowTypes),
+          stages: JSON.stringify(formData.stages),
+        });
+      } catch (error) {
+        console.error('Error updating workflow:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workflows"] });
@@ -71,6 +97,14 @@ export default function Workflows() {
       toast({
         title: "Workflow Updated",
         description: "The workflow has been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.message || "Failed to update workflow";
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
       });
     },
   });
@@ -84,6 +118,14 @@ export default function Workflows() {
       toast({
         title: "Workflow Deleted",
         description: "The workflow has been deleted successfully.",
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.message || "Failed to delete workflow";
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
       });
     },
   });
@@ -169,7 +211,22 @@ export default function Workflows() {
           </Button>
         </div>
 
-        {workflows.length === 0 ? (
+        {isWorkflowsLoading ? (
+          <Card className="border-card-border">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <Workflow className="w-16 h-16 text-muted-foreground mb-4 animate-spin" />
+              <h3 className="text-lg font-semibold mb-2">Loading workflows...</h3>
+            </CardContent>
+          </Card>
+        ) : workflowsError ? (
+          <Card className="border-card-border">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center text-destructive">
+              <XCircle className="w-16 h-16 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Error loading workflows</h3>
+              <p className="text-sm">{workflowsError instanceof Error ? workflowsError.message : 'An error occurred'}</p>
+            </CardContent>
+          </Card>
+        ) : workflows.length === 0 ? (
           <Card className="border-card-border">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Workflow className="w-16 h-16 text-muted-foreground mb-4" />
@@ -186,8 +243,17 @@ export default function Workflows() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {workflows.map((workflow) => {
-              const stages = JSON.parse(workflow.stages) as WorkflowStage[];
-              const types = JSON.parse(workflow.sowTypes) as string[];
+              let stages: WorkflowStage[] = [];
+              let types: string[] = [];
+              try {
+                stages = JSON.parse(workflow.stages || '[]') as WorkflowStage[];
+                types = JSON.parse(workflow.sowTypes || '[]') as string[];
+              } catch (error) {
+                console.error('Error parsing workflow data:', error);
+                // Provide default values if parsing fails
+                stages = [];
+                types = [];
+              }
 
               return (
                 <Card key={workflow.id} className="border-card-border" data-testid={`card-workflow-${workflow.id}`}>

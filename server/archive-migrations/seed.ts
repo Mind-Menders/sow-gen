@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db } from "../db";
 import { templates, users, workflows } from "@shared/schema";
 
 const defaultSections = {
