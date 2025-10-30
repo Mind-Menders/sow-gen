@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Save, Download, Sparkles, Check } from "lucide-react";
+import { ArrowLeft, Save, Download, Sparkles, Check, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Sow, SowSections } from "@shared/schema";
+import type { Sow, SowSections, SowApproval } from "@shared/schema";
 
 const statusConfig = {
   draft: { label: "Draft", variant: "secondary" as const },
@@ -33,6 +33,11 @@ export default function Editor() {
 
   const { data: sow, isLoading } = useQuery<Sow>({
     queryKey: sowId ? [`/api/sows/${sowId}`] : ["/api/sows"],
+    enabled: !!sowId,
+  });
+
+  const { data: approvals } = useQuery<SowApproval[]>({
+    queryKey: sowId ? [`/api/sows/${sowId}/approvals`] : ["/api/approvals"],
     enabled: !!sowId,
   });
 
@@ -182,12 +187,45 @@ export default function Editor() {
     },
     onError: () => {
       toast({
-        title: "Save failed",
+        title: "Save Failed",
         description: "Could not save your changes. Please try again.",
         variant: "destructive",
       });
     },
   });
+
+  const submitForApprovalMutation = useMutation({
+    mutationFn: async () => {
+      if (!sowId) return;
+      return apiRequest("PATCH", `/api/sows/${sowId}`, {
+        status: "pending_approval",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}/approvals`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+      toast({
+        title: "Submitted",
+        description: "SOW has been submitted for approval.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Submission Failed",
+        description: "Could not submit for approval. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleApplySuggestion = () => {
+    if (aiSuggestion) {
+      setEditContent(aiSuggestion);
+      setAiSuggestion("");
+      setHasUnsavedChanges(true);
+    }
+  };
 
   const handleExport = () => {
     if (!sow) return;
@@ -236,6 +274,14 @@ export default function Editor() {
 
   const sectionsList = Object.entries(sections);
   const completedSections = sectionsList.filter(([, section]) => section.content.trim().length > 0).length;
+  
+  // Get current approval status
+  const currentApproval = approvals && approvals.length > 0 ? approvals[0] : null;
+  const approvalStatusConfig = {
+    pending: { label: "Pending Review", icon: Clock, variant: "secondary" as const },
+    approved: { label: "Approved", icon: CheckCircle2, variant: "default" as const },
+    rejected: { label: "Rejected", icon: XCircle, variant: "destructive" as const },
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -255,8 +301,38 @@ export default function Editor() {
               </Badge>
             </div>
             <p className="text-sm font-mono text-muted-foreground" data-testid="text-sow-number">#{sow.sowNumber}</p>
+            
+            {/* Approval Status */}
+            {currentApproval && (
+              <div className="mt-3 flex items-center gap-2">
+                {(() => {
+                  const ApprovalIcon = approvalStatusConfig[currentApproval.status as keyof typeof approvalStatusConfig]?.icon || Clock;
+                  return (
+                    <>
+                      <ApprovalIcon className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">
+                        Approval: <span className="font-medium">{approvalStatusConfig[currentApproval.status as keyof typeof approvalStatusConfig]?.label || currentApproval.status}</span>
+                        {currentApproval.currentStage !== undefined && ` (Stage ${currentApproval.currentStage})`}
+                      </span>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Submit for Approval - only show if draft and has workflow */}
+            {sow.status === "draft" && sow.workflowId && (
+              <Button 
+                variant="default" 
+                onClick={() => submitForApprovalMutation.mutate()}
+                disabled={submitForApprovalMutation.isPending}
+                data-testid="button-submit-approval"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                {submitForApprovalMutation.isPending ? "Submitting..." : "Submit for Approval"}
+              </Button>
+            )}
             <Button variant="outline" onClick={handleExport} data-testid="button-export">
               <Download className="w-4 h-4 mr-2" />
               Export
@@ -416,11 +492,8 @@ export default function Editor() {
                 )}
                 
                 <p className="text-xs text-muted-foreground text-center border-t pt-4">
-                  Powered by OpenAI GPT-5
+                  Powered by Gemma3 / Azure AI GPT-5
                   <br />
-                  <span className="text-[10px] text-muted-foreground/60 italic">
-                    [Can be replaced with Microsoft Azure AI]
-                  </span>
                 </p>
               </CardContent>
             </Card>

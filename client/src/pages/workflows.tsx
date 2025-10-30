@@ -145,12 +145,37 @@ export default function Workflows() {
   };
 
   const handleOpenEditDialog = (workflow: WorkflowType) => {
+    // Be defensive: workflow.sowTypes and workflow.stages may already be parsed arrays
     setEditingWorkflow(workflow);
+    let parsedSowTypes: string[] = [];
+    let parsedStages: WorkflowStage[] = [];
+    try {
+      if (typeof workflow.sowTypes === "string") {
+        parsedSowTypes = JSON.parse(workflow.sowTypes || "[]");
+      } else if (Array.isArray(workflow.sowTypes)) {
+        parsedSowTypes = workflow.sowTypes as unknown as string[];
+      }
+    } catch (err) {
+      console.error("Failed to parse sowTypes for edit:", err);
+      parsedSowTypes = [];
+    }
+
+    try {
+      if (typeof workflow.stages === "string") {
+        parsedStages = JSON.parse(workflow.stages || "[]");
+      } else if (Array.isArray(workflow.stages)) {
+        parsedStages = workflow.stages as unknown as WorkflowStage[];
+      }
+    } catch (err) {
+      console.error("Failed to parse stages for edit:", err);
+      parsedStages = [];
+    }
+
     setFormData({
       name: workflow.name,
       description: workflow.description,
-      sowTypes: JSON.parse(workflow.sowTypes),
-      stages: JSON.parse(workflow.stages),
+      sowTypes: parsedSowTypes,
+      stages: parsedStages,
     });
   };
 

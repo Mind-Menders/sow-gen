@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { FileStack, Eye, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Template } from "@shared/schema";
 
 export default function Templates() {
+  const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
   const { data: templates = [], isLoading } = useQuery<Template[]>({
     queryKey: ["/api/templates"],
   });
@@ -63,7 +66,12 @@ export default function Templates() {
                   <Badge variant="outline" className="w-fit text-xs lowercase">{template.sowType}</Badge>
                 </CardHeader>
                 <CardContent>
-                  <Button variant="outline" className="w-full gap-2" data-testid={`button-preview-${template.id}`}>
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    data-testid={`button-preview-${template.id}`}
+                    onClick={() => setPreviewTemplate(template)}
+                  >
                     <Eye className="w-4 h-4" />
                     Preview
                   </Button>
@@ -73,6 +81,43 @@ export default function Templates() {
           </div>
         )}
       </div>
+
+      <Dialog open={!!previewTemplate} onOpenChange={() => setPreviewTemplate(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Template Preview</DialogTitle>
+            <DialogDescription>{previewTemplate?.name}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {(() => {
+              if (!previewTemplate) return null;
+              let sections: Record<string, any> = {};
+              try {
+                if (typeof previewTemplate.sections === "string") {
+                  sections = JSON.parse(previewTemplate.sections || "{}");
+                } else {
+                  sections = previewTemplate.sections || {};
+                }
+              } catch (err) {
+                console.error("Failed to parse template sections:", err);
+                sections = {};
+              }
+
+              return Object.entries(sections).map(([key, s]) => (
+                <div key={key} className="border rounded p-3">
+                  <h3 className="font-semibold">{s?.title || key}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">{s?.content || "(no content)"}</p>
+                </div>
+              ));
+            })()}
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setPreviewTemplate(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

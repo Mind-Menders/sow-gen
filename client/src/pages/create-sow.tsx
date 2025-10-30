@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -68,6 +69,7 @@ export default function CreateSOW() {
     endDate: "",
     budget: "",
     currency: "USD",
+    requirements: "",
     templateId: "",
     workflowId: "",
   });
@@ -104,6 +106,7 @@ export default function CreateSOW() {
         endDate: formData.endDate || undefined,
         budget: formData.budget || undefined,
         currency: formData.currency || "USD",
+        requirements: formData.requirements || undefined,
         status: formData.workflowId ? "pending_approval" : "draft",
         workflowId: formData.workflowId || undefined,
         sections: sectionsData,
@@ -333,6 +336,21 @@ export default function CreateSOW() {
                     />
                   </div>
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="requirements">Requirements</Label>
+                  <Textarea
+                    id="requirements"
+                    placeholder="Enter key requirements and expectations for this SOW..."
+                    value={formData.requirements}
+                    onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
+                    className="min-h-[120px]"
+                    data-testid="textarea-requirements"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    These requirements will be used by AI to generate better content suggestions
+                  </p>
+                </div>
               </div>
             )}
 
@@ -383,11 +401,21 @@ export default function CreateSOW() {
                   {workflows
                     .filter((w) => {
                       if (!formData.sowType) return true;
-                      const sowTypes = JSON.parse(w.sowTypes) as string[];
-                      return sowTypes.includes(formData.sowType);
+                      try {
+                        const sowTypes = JSON.parse(w.sowTypes) as string[];
+                        return sowTypes.includes(formData.sowType);
+                      } catch (e) {
+                        // If sowTypes is not valid JSON, treat it as a single type
+                        return w.sowTypes === formData.sowType;
+                      }
                     })
                     .map((workflow) => {
-                      const stages = JSON.parse(workflow.stages) as WorkflowStage[];
+                      let stages: WorkflowStage[] = [];
+                      try {
+                        stages = JSON.parse(workflow.stages) as WorkflowStage[];
+                      } catch (e) {
+                        console.error("Error parsing workflow stages:", e);
+                      }
                       const isSelected = formData.workflowId === workflow.id;
                       return (
                         <Card
@@ -429,8 +457,12 @@ export default function CreateSOW() {
                     })}
                   {workflows.filter((w) => {
                     if (!formData.sowType) return true;
-                    const sowTypes = JSON.parse(w.sowTypes) as string[];
-                    return sowTypes.includes(formData.sowType);
+                    try {
+                      const sowTypes = JSON.parse(w.sowTypes) as string[];
+                      return sowTypes.includes(formData.sowType);
+                    } catch (e) {
+                      return w.sowTypes === formData.sowType;
+                    }
                   }).length === 0 && (
                     <div className="text-center py-8 text-muted-foreground">
                       <p className="text-sm">No workflows available for this SOW type</p>

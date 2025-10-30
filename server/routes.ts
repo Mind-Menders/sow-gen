@@ -316,6 +316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: sow.title,
           vendorName: sow.vendorName,
           sowType: sow.sowType,
+          requirements: sow.requirements || undefined,
         }
       );
 
@@ -323,6 +324,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("AI generation error:", error);
       res.status(500).json({ error: "Failed to generate content" });
+    }
+  });
+
+  // SOW Approvals routes
+  app.get("/api/sows/:id/approvals", async (req, res) => {
+    try {
+      const approvals = await dbStorage.getSowApprovalsBySowId(req.params.id);
+      res.json(approvals);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch approvals" });
     }
   });
 

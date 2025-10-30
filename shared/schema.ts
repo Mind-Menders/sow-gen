@@ -43,6 +43,7 @@ export const sows = pgTable("sows", {
   sowType: text("sow_type").notNull(),
   status: text("status").notNull().default("draft"),
   workflowId: varchar("workflow_id").references(() => workflows.id),
+  requirements: text("requirements"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   sections: text("sections").notNull().default("{}"),
