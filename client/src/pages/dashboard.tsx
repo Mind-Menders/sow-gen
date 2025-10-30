@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { FileText, FileCheck, Clock, CheckCircle2, Plus, Filter, Search } from "lucide-react";
+import { FileText, FileCheck, Clock, CheckCircle2, Plus, Filter, Search, User, Edit } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,9 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Sow } from "@shared/schema";
+import type { Sow, User as UserType } from "@shared/schema";
 import { format } from "date-fns";
 import bgImage from "@assets/stock_images/abstract_blue_purple_8c94cc67.jpg";
+import { useAuth } from "@/hooks/useAuth";
 
 const statusConfig = {
   draft: {
@@ -38,9 +39,14 @@ const statusConfig = {
 export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const { user } = useAuth();
 
   const { data: sows = [], isLoading } = useQuery<Sow[]>({
     queryKey: ["/api/sows"],
+  });
+
+  const { data: users = [] } = useQuery<UserType[]>({
+    queryKey: ["/api/users"],
   });
 
   const filteredSows = sows.filter((sow) => {
@@ -54,6 +60,14 @@ export default function Dashboard() {
     draft: sows.filter((s) => s.status === "draft").length,
     pending: sows.filter((s) => s.status === "pending_approval").length,
     approved: sows.filter((s) => s.status === "approved").length,
+  };
+
+  const canEditSow = (sow: Sow) => {
+    if (!user) return false;
+    // Admin can edit any SOW
+    if (user.role === "admin") return true;
+    // Initiator can edit their own SOWs
+    return sow.createdBy === user.id;
   };
 
   return (
@@ -189,12 +203,20 @@ export default function Dashboard() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredSows.map((sow) => (
+            {filteredSows.map((sow) => {
+              const initiator = users.find((u) => u.id === sow.createdBy);
+              return (
               <Card key={sow.id} className="border-card-border hover-elevate group" data-testid={`card-sow-${sow.id}`}>
                 <CardHeader className="space-y-3">
-                  <Badge variant={statusConfig[sow.status as keyof typeof statusConfig].variant} className="w-fit uppercase text-xs font-semibold">
-                    {statusConfig[sow.status as keyof typeof statusConfig].label}
-                  </Badge>
+                  {statusConfig[sow.status as keyof typeof statusConfig] ? (
+                    <Badge variant={statusConfig[sow.status as keyof typeof statusConfig].variant} className="w-fit uppercase text-xs font-semibold">
+                      {statusConfig[sow.status as keyof typeof statusConfig].label}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="w-fit uppercase text-xs font-semibold">
+                      Unknown Status
+                    </Badge>
+                  )}
                   <h3 className="text-lg font-semibold text-foreground line-clamp-2" data-testid={`text-sow-title-${sow.id}`}>
                     {sow.title}
                   </h3>
@@ -208,17 +230,26 @@ export default function Dashboard() {
                     <p className="text-muted-foreground">
                       <span className="font-medium">Sponsor:</span> {sow.sponsor}
                     </p>
+                    {initiator && (
+                      <p className="text-muted-foreground flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        <span className="font-medium">Initiated by:</span> {initiator.firstName} {initiator.lastName}
+                      </p>
+                    )}
                     <p className="text-muted-foreground">{format(new Date(sow.createdAt), "MMM dd, yyyy")}</p>
                     <Badge variant="outline" className="text-xs">{sow.sowType}</Badge>
                   </div>
-                  <Link href={`/editor?id=${sow.id}`}>
-                    <Button variant="outline" className="w-full" data-testid={`button-open-${sow.id}`}>
-                      Open
-                    </Button>
-                  </Link>
+                  <div className="flex gap-2">
+                    <Link href={`/editor?id=${sow.id}`}>
+                      <Button variant="destructive" className="flex-1" data-testid={`button-open-${sow.id}`}>
+                        Open
+                      </Button>
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import type { Template, Workflow, WorkflowStage } from "@shared/schema";
 
 const sowTypeOptions = [
@@ -56,6 +57,7 @@ const steps = [
 export default function CreateSOW() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     sowType: "",
@@ -109,6 +111,7 @@ export default function CreateSOW() {
         requirements: formData.requirements || undefined,
         status: formData.workflowId ? "pending_approval" : "draft",
         workflowId: formData.workflowId || undefined,
+        createdBy: user?.id || undefined,
         sections: sectionsData,
       });
     },

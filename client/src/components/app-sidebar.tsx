@@ -1,5 +1,6 @@
-import { Home, FileText, FileStack, Workflow, User, FileSignature, LogOut, ChevronUp } from "lucide-react";
+import { Home, FileText, FileStack, Workflow, User, FileSignature, LogOut, ChevronUp, KeyRound } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,6 +21,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
@@ -58,19 +64,91 @@ const menuItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  // Automatically open change password dialog if user must change password
+  useEffect(() => {
+    if ((user as any)?.mustChangePassword) {
+      setChangePasswordOpen(true);
+    }
+  }, [user]);
 
   const handleLogout = () => {
     window.location.href = "/api/logout";
   };
 
-  const displayName = user?.firstName && user?.lastName 
+  const handleChangePassword = async () => {
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "New passwords do not match",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const skipCurrent = !!(user as any)?.mustChangePassword || !!(user as any)?.forcePasswordChange;
+      const payload: any = { newPassword: passwordData.newPassword };
+      if (!skipCurrent) payload.currentPassword = passwordData.currentPassword;
+
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message);
+      }
+
+      toast({
+        title: "Success",
+        description: "Password changed successfully",
+      });
+      setChangePasswordOpen(false);
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to change password",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Prefer full name if available, then fallback to name, then email local part
+  const displayName = user?.firstName && user?.lastName
     ? `${user.firstName} ${user.lastName}`
-    : user?.email?.split('@')[0] || "User";
-  
+    : user?.name && user.name.length > 0
+      ? user.name
+      : user?.firstName
+        ? user.firstName
+        : user?.lastName
+          ? user.lastName
+          : user?.email?.split('@')[0] || "User";
+
   const userRole = user?.role || "User";
-  const initials = user?.firstName && user?.lastName
-    ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
-    : user?.email?.[0]?.toUpperCase() || "U";
+
+  // Compute initials from name if present, otherwise fall back to firstName/lastName or email
+  let initials = "U";
+  if (user?.name && user.name.trim().length > 0) {
+    const parts = user.name.trim().split(/\s+/);
+    initials = (parts[0][0] || "").toUpperCase() + (parts[1]?.[0] || "").toUpperCase();
+    initials = initials || "U";
+  } else if (user?.firstName || user?.lastName) {
+    const f = user?.firstName?.[0] || "";
+    const l = user?.lastName?.[0] || "";
+    initials = (f + l).toUpperCase() || "U";
+  } else if (user?.email) {
+    initials = (user.email[0] || "U").toUpperCase();
+  }
 
   return (
     <Sidebar>
@@ -81,7 +159,7 @@ export function AppSidebar() {
           </div>
           <div className="space-y-1">
             <h1 className="text-xl font-bold text-foreground" data-testid="text-app-title">
-              SOW Generator
+              SOW Gen.ai
             </h1>
             <p className="text-xs text-muted-foreground" data-testid="text-app-edition">Enterprise Edition</p>
           </div>
@@ -138,12 +216,82 @@ export function AppSidebar() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="end" className="w-56">
+            <DropdownMenuItem onClick={() => setChangePasswordOpen(true)} data-testid="button-change-password">
+              <KeyRound className="w-4 h-4 mr-2" />
+              <span>Change Password</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} data-testid="button-logout">
               <LogOut className="w-4 h-4 mr-2" />
               <span>Log out</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <Dialog open={changePasswordOpen} onOpenChange={(open) => {
+          // Prevent closing if user must change password
+          if (!(user as any)?.mustChangePassword) {
+            setChangePasswordOpen(open);
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change Password</DialogTitle>
+              <DialogDescription>
+                {(user as any)?.mustChangePassword 
+                  ? "You must change your password to continue. Use 'admin' as your current password if this is your first login."
+                  : "Update your account password. Enter your current password and choose a new one."
+                }
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                {/* Show current password only if user is not forced to change */}
+                {!( (user as any)?.mustChangePassword || (user as any)?.forcePasswordChange ) && (
+                  <div className="space-y-2">
+                    <Label htmlFor="current-password">Current Password</Label>
+                    <Input
+                      id="current-password"
+                      type="password"
+                      value={passwordData.currentPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                      placeholder="Enter current password"
+                    />
+                  </div>
+                )}
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={passwordData.newPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                  placeholder="Enter new password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm New Password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={passwordData.confirmPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                  placeholder="Confirm new password"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setChangePasswordOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleChangePassword}
+                disabled={(!( (user as any)?.mustChangePassword || (user as any)?.forcePasswordChange ) && !passwordData.currentPassword) || !passwordData.newPassword || !passwordData.confirmPassword}
+              >
+                Change Password
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

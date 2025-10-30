@@ -44,6 +44,7 @@ export const sows = pgTable("sows", {
   status: text("status").notNull().default("draft"),
   workflowId: varchar("workflow_id").references(() => workflows.id),
   requirements: text("requirements"),
+  createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   sections: text("sections").notNull().default("{}"),
@@ -70,6 +71,7 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("user"),
   department: text("department"),
   isActive: boolean("is_active").notNull().default(true),
+  forcePasswordChange: boolean("force_password_change").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

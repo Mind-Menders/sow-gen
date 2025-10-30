@@ -18,7 +18,7 @@ export default function LoginPage() {
     setError("");
     
     try {
-      await login(email, password);
+      const userData = await login(email, password);
       setLocation("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

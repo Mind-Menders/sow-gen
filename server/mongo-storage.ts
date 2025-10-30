@@ -1,4 +1,5 @@
 import { MongoClient, Db, Collection, ObjectId } from "mongodb";
+import { hash } from "bcrypt";
 import { type Sow, type InsertSow, type Template, type InsertTemplate, type User, type InsertUser, type UpsertUser, type Workflow, type InsertWorkflow, type SowApproval, type InsertSowApproval } from "@shared/schema";
 import { type IStorage } from "./storage";
 
@@ -81,6 +82,8 @@ interface MongoSow {
   budget?: string | null;
   currency?: string | null;
   workflowId?: string | null;
+  requirements?: string | null;
+  createdBy?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -106,6 +109,7 @@ interface MongoUser {
   role: string;
   department: string;
   isActive: boolean;
+  forcePasswordChange: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -350,10 +354,20 @@ export class MongoStorage implements IStorage {
       sowNumber: mongoSow.sowNumber,
       title: mongoSow.title,
       vendorName: mongoSow.vendorName,
-      sponsor: mongoSow.sponsor,
+      sponsor: mongoSow.sponsor ?? null,
       sowType: mongoSow.sowType,
       status: mongoSow.status,
       sections: mongoSow.sections,
+      initiative: mongoSow.initiative ?? "",
+      deliveryPortfolio: mongoSow.deliveryPortfolio ?? null,
+      businessOwner: mongoSow.businessOwner ?? null,
+      startDate: mongoSow.startDate ?? null,
+      endDate: mongoSow.endDate ?? null,
+      budget: mongoSow.budget ?? null,
+      currency: mongoSow.currency ?? null,
+      workflowId: mongoSow.workflowId ?? null,
+      requirements: mongoSow.requirements ?? null,
+      createdBy: mongoSow.createdBy ?? null,
       createdAt: mongoSow.createdAt,
       updatedAt: mongoSow.updatedAt,
     };
@@ -390,10 +404,20 @@ export class MongoStorage implements IStorage {
       _id: new ObjectId(),
       sowNumber: insertSow.sowNumber || generateSowNumber(),
       title: insertSow.title,
+      initiative: insertSow.initiative,
+      deliveryPortfolio: insertSow.deliveryPortfolio,
       vendorName: insertSow.vendorName,
       sponsor: insertSow.sponsor,
+      businessOwner: insertSow.businessOwner,
+      startDate: insertSow.startDate,
+      endDate: insertSow.endDate,
+      budget: insertSow.budget,
+      currency: insertSow.currency,
       sowType: insertSow.sowType,
       status: insertSow.status || "draft",
+      workflowId: insertSow.workflowId,
+      requirements: insertSow.requirements,
+      createdBy: insertSow.createdBy,
       sections: insertSow.sections || "{}",
       createdAt: now,
       updatedAt: now,
@@ -457,6 +481,7 @@ export class MongoStorage implements IStorage {
       role: mongoUser.role || "user",
       department: mongoUser.department || "",
       isActive: mongoUser.isActive ?? true,
+      forcePasswordChange: mongoUser.forcePasswordChange ?? true,
       createdAt: mongoUser.createdAt,
       updatedAt: mongoUser.updatedAt,
     };
@@ -496,17 +521,22 @@ export class MongoStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     await this.ensureConnected();
     const now = new Date();
+    // If no password provided, set default password to 'admin' (hashed)
+    const rawPassword = insertUser.password && insertUser.password.length > 0 ? insertUser.password : "admin";
+    const hashed = await hash(rawPassword, 10);
+
     const mongoUser: MongoUser = {
       _id: new ObjectId(),
       name: insertUser.name || "",
       email: insertUser.email || "",
-      password: insertUser.password || "",
+      password: hashed,
       firstName: insertUser.firstName || "",
       lastName: insertUser.lastName || "",
       profileImageUrl: insertUser.profileImageUrl || "",
       role: insertUser.role || 'user',
       department: insertUser.department || "",
       isActive: insertUser.isActive ?? true,
+      forcePasswordChange: insertUser.forcePasswordChange ?? true,
       createdAt: now,
       updatedAt: now,
     };
@@ -523,17 +553,19 @@ export class MongoStorage implements IStorage {
     await this.ensureConnected();
     const now = new Date();
     const _id = user.id ? new ObjectId(user.id) : new ObjectId();
+    const passwordToUse = user.password && user.password.length > 0 ? await hash(user.password, 10) : await hash("admin", 10);
     const mongoUser: MongoUser = {
       _id,
       name: user.name || "",
       email: user.email || "",
-      password: user.password || "",
+      password: passwordToUse,
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       profileImageUrl: user.profileImageUrl || "",
       role: user.role || "user",
       department: user.department || "",
       isActive: user.isActive ?? true,
+      forcePasswordChange: (user as any).forcePasswordChange ?? true,
       createdAt: now,
       updatedAt: now,
     };
@@ -645,6 +677,27 @@ export class MongoStorage implements IStorage {
       reviewedAt: a.reviewedAt,
       createdAt: a.createdAt,
     }));
+  }
+
+  async updateSowApproval(id: string, updates: Partial<SowApproval>): Promise<SowApproval | null> {
+    await this.ensureConnected();
+    const result = await this.approvalsCollection!.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: updates },
+      { returnDocument: 'after' }
+    );
+    if (!result) return null;
+    return {
+      id: result._id.toHexString(),
+      sowId: result.sowId,
+      workflowId: result.workflowId,
+      currentStage: result.currentStage,
+      reviewerId: result.reviewerId,
+      status: result.status,
+      comments: result.comments,
+      reviewedAt: result.reviewedAt,
+      createdAt: result.createdAt,
+    };
   }
 
   async close(): Promise<void> {

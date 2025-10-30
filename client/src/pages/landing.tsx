@@ -45,7 +45,7 @@ export default function Landing() {
             <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary text-primary-foreground">
               <FileText className="w-6 h-6" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">SOWify</h1>
+            <h1 className="text-2xl font-bold text-foreground">SOW Gen.ai</h1>
           </div>
           <Button onClick={handleLogin} data-testid="button-login" className="gap-2">
             Log In
@@ -160,7 +160,7 @@ export default function Landing() {
         </main>
 
         <footer className="p-6 text-center text-sm text-muted-foreground">
-          <p>&copy; 2025 SOWify. Enterprise Edition.</p>
+          <p>&copy; 2025 SOW Gen.ai. Enterprise Edition.</p>
         </footer>
       </div>
     </div>

@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { useAuth, AuthProvider } from "@/hooks/useAuth";
 import Dashboard from "@/pages/dashboard";
 import CreateSOW from "@/pages/create-sow";
+import EditSOW from "@/pages/edit-sow";
 import Editor from "@/pages/editor";
 import Templates from "@/pages/templates";
 import Workflows from "@/pages/workflows";
@@ -31,6 +32,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/createsow" component={CreateSOW} />
+      <Route path="/editsow" component={EditSOW} />
       <Route path="/editor" component={Editor} />
       <Route path="/templates" component={Templates} />
       <Route path="/workflows" component={Workflows} />

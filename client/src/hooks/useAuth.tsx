@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ mustChangePassword?: boolean }>;
   logout: () => Promise<void>;
 }
 
@@ -14,16 +14,26 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
+  const [isInitializing, setIsInitializing] = useState(true);
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/auth/user"],
     retry: false,
+    staleTime: Infinity, // Keep user data cached indefinitely until explicitly invalidated
   });
+
+  // Only set initializing to false after first query completes
+  useEffect(() => {
+    if (!isLoading) {
+      setIsInitializing(false);
+    }
+  }, [isLoading]);
 
   const login = async (email: string, password: string) => {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
+      credentials: "include",
     });
 
     if (!response.ok) {
@@ -33,6 +43,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const userData = await response.json();
     queryClient.setQueryData(["/api/auth/user"], userData);
+    // Also invalidate the query to ensure it's refetched with the new session
+    await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+
+    return userData;
   };
 
   const logout = async () => {
@@ -42,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = {
     user: user || null,
-    isLoading,
+    isLoading: isInitializing,
     isAuthenticated: !!user,
     login,
     logout,

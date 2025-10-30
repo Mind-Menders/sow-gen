@@ -55,11 +55,15 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
+        // For login endpoint, log full response for debugging
+        if (path === "/api/auth/login" && res.statusCode === 200) {
+          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        } else {
+          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+          if (logLine.length > 80) {
+            logLine = logLine.slice(0, 79) + "…";
+          }
+        }
       }
 
       log(logLine);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { User, Plus, Edit, Trash2, Mail, Building, CheckCircle, XCircle, Save } from "lucide-react";
 import bgImage from "@assets/stock_images/modern_office_worksp_0da7beab.jpg";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { User as UserType } from "@shared/schema";
 
 export default function ProfileManager() {
   const { toast } = useToast();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [passwordData, setPasswordData] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
   const [formData, setFormData] = useState({
@@ -106,6 +109,47 @@ export default function ProfileManager() {
       isActive: user.isActive,
     });
   };
+
+  // If forced change requested via query param, open change password dialog
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("forceChange") === "1") {
+        setChangePasswordOpen(true);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  const { user } = useAuth();
+  const skipCurrent = !!(user as any)?.mustChangePassword || !!(user as any)?.forcePasswordChange;
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async () => {
+      const payload: any = { newPassword: passwordData.newPassword };
+      if (!skipCurrent) payload.currentPassword = passwordData.currentPassword;
+
+      return fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: async (res: Response) => {
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to change password");
+      }
+      toast({ title: "Password changed", description: "Your password was updated." });
+      setChangePasswordOpen(false);
+      // redirect to dashboard
+      window.location.href = "/";
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err?.message || "Failed to change password", variant: "destructive" });
+    },
+  });
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
@@ -332,6 +376,70 @@ export default function ProfileManager() {
                 data-testid="button-save-user"
               >
                 {editingUser ? "Update" : "Add"} User
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Change password dialog (force or user-initiated) */}
+        <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change Password</DialogTitle>
+              <DialogDescription>
+                Update your account password. If this is your first login, use the default password as the current password (admin).
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {/* Only show current password when the user is not being forced to change */}
+              {!skipCurrent && (
+                <div className="space-y-2">
+                  <Label htmlFor="current-password">Current Password</Label>
+                  <Input
+                    id="current-password"
+                    type="password"
+                    value={passwordData.currentPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                    placeholder="Enter current password"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={passwordData.newPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                  placeholder="Enter new password"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm New Password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={passwordData.confirmPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                  placeholder="Confirm new password"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setChangePasswordOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  if (passwordData.newPassword !== passwordData.confirmPassword) {
+                    toast({ title: "Error", description: "Passwords do not match", variant: "destructive" });
+                    return;
+                  }
+                  changePasswordMutation.mutate();
+                }}
+                disabled={(!skipCurrent && !passwordData.currentPassword) || !passwordData.newPassword || !passwordData.confirmPassword}
+              >
+                Change Password
               </Button>
             </DialogFooter>
           </DialogContent>

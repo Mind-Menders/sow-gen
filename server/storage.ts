@@ -29,6 +29,7 @@ export interface IStorage {
   
   createSowApproval(approval: InsertSowApproval): Promise<SowApproval>;
   getSowApprovalsBySowId(sowId: string): Promise<SowApproval[]>;
+  updateSowApproval(id: string, updates: Partial<SowApproval>): Promise<SowApproval | null>;
 }
 
 function generateSowNumber(): string {
@@ -94,14 +95,11 @@ const defaultSections = {
 };
 
 export class MemStorage implements IStorage {
-  private sows: Map<string, Sow>;
-  private templates: Map<string, Template>;
-
-  constructor() {
-    this.sows = new Map();
-    this.templates = new Map();
-    this.initializeDefaultData();
-  }
+  private sows: Map<string, Sow> = new Map();
+  private templates: Map<string, Template> = new Map();
+  private users: User[] = [];
+  private workflows: Workflow[] = [];
+  private sowApprovals: SowApproval[] = [];
 
   private initializeDefaultData() {
     const template1: Template = {
@@ -418,6 +416,17 @@ export class MemStorage implements IStorage {
 
   async getSowApprovalsBySowId(sowId: string): Promise<SowApproval[]> {
     return [];
+  }
+
+  async updateSowApproval(id: string, updates: Partial<SowApproval>): Promise<SowApproval | null> {
+    const index = this.sowApprovals.findIndex(a => a.id === id);
+    if (index === -1) return null;
+    
+    this.sowApprovals[index] = {
+      ...this.sowApprovals[index],
+      ...updates,
+    };
+    return this.sowApprovals[index];
   }
 }
 
