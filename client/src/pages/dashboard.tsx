@@ -19,15 +19,15 @@ import { useAuth } from "@/hooks/useAuth";
 
 const statusConfig = {
   draft: {
-    label: "Draft",
+    label: "Initiated",
     variant: "secondary" as const,
   },
-  pending_approval: {
-    label: "Pending Approval",
+  in_review: {
+    label: "In Review",
     variant: "default" as const,
   },
-  approved: {
-    label: "Approved",
+  ready_for_submission: {
+    label: "Ready for Submission",
     variant: "default" as const,
   },
   rejected: {
@@ -58,8 +58,8 @@ export default function Dashboard() {
   const stats = {
     total: sows.length,
     draft: sows.filter((s) => s.status === "draft").length,
-    pending: sows.filter((s) => s.status === "pending_approval").length,
-    approved: sows.filter((s) => s.status === "approved").length,
+    in_review: sows.filter((s) => s.status === "in_review").length,
+    ready_for_submission: sows.filter((s) => s.status === "ready_for_submission").length,
   };
 
   const canEditSow = (sow: Sow) => {
@@ -112,24 +112,24 @@ export default function Dashboard() {
           <Card className="border-card-border hover-elevate">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-muted-foreground">Pending Approval</p>
+                <p className="text-sm font-medium text-muted-foreground">In Review</p>
                 <Clock className="w-5 h-5 text-muted-foreground" />
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-4xl font-bold text-foreground" data-testid="stat-pending">{stats.pending}</p>
+              <p className="text-4xl font-bold text-foreground" data-testid="stat-pending">{stats.in_review}</p>
             </CardContent>
           </Card>
 
           <Card className="border-card-border hover-elevate">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-muted-foreground">Approved</p>
+                <p className="text-sm font-medium text-muted-foreground">Reviewed</p>
                 <CheckCircle2 className="w-5 h-5 text-muted-foreground" />
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-4xl font-bold text-foreground" data-testid="stat-approved">{stats.approved}</p>
+              <p className="text-4xl font-bold text-foreground" data-testid="stat-approved">{stats.ready_for_submission}</p>
             </CardContent>
           </Card>
         </div>
@@ -142,10 +142,9 @@ export default function Dashboard() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="pending_approval">Pending Approval</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
+                {Object.entries(statusConfig).map(([key, value]) => (
+                  <SelectItem key={key} value={key}>{value.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -209,7 +208,13 @@ export default function Dashboard() {
               <Card key={sow.id} className="border-card-border hover-elevate group" data-testid={`card-sow-${sow.id}`}>
                 <CardHeader className="space-y-3">
                   {statusConfig[sow.status as keyof typeof statusConfig] ? (
-                    <Badge variant={statusConfig[sow.status as keyof typeof statusConfig].variant} className="w-fit uppercase text-xs font-semibold">
+                    <Badge
+                      variant={statusConfig[sow.status as keyof typeof statusConfig].variant}
+                      className={
+                        `w-fit uppercase text-xs font-semibold` +
+                        (sow.status === "ready_for_submission" ? " bg-green-600 text-white" : "")
+                      }
+                    >
                       {statusConfig[sow.status as keyof typeof statusConfig].label}
                     </Badge>
                   ) : (

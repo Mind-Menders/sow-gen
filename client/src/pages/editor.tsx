@@ -226,13 +226,30 @@ export default function Editor() {
       console.log('Mark as reviewed response:', res);
       return res;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       console.log('Mark as reviewed success:', data);
       queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}/approvals`] });
       toast({
         title: "Marked as Reviewed",
         description: "Your review has been recorded.",
       });
+
+      // Check if all approvals are reviewed
+      try {
+        const approvalsRes = await apiRequest("GET", `/api/sows/${sowId}/approvals`);
+        const allReviewed = Array.isArray(approvalsRes) && approvalsRes.length > 0 && approvalsRes.every((a) => a.reviewedAt);
+        if (allReviewed) {
+          await apiRequest("PATCH", `/api/sows/${sowId}`, { status: "ready_for_submission" });
+          queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
+          queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+          toast({
+            title: "SOW Ready for Submission",
+            description: "All reviewers have approved. Status updated.",
+          });
+        }
+      } catch (e) {
+        console.error("Error updating SOW status after all reviews:", e);
+      }
     },
     onError: (err) => {
       console.error('Mark as reviewed error:', err);
@@ -385,6 +402,10 @@ export default function Editor() {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-7xl mx-auto p-8 space-y-6">
+        {/* Project Title */}
+        <h1 className="text-2xl font-bold text-foreground mb-2" data-testid="sow-title">
+          {sow.title}
+        </h1>
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => setLocation("/")} data-testid="button-back">
             <ArrowLeft className="w-4 h-4 mr-2" />
