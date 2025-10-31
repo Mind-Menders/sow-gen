@@ -516,6 +516,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get audit trail for a SOW
+  app.get("/api/sows/:id/audit", async (req, res) => {
+    try {
+      const auditTrail = await dbStorage.getSowAuditTrail(req.params.id);
+      res.json(auditTrail);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch audit trail" });
+    }
+  });
+
+  // Add audit trail entry
+  app.post("/api/sows/:id/audit", async (req, res) => {
+    // Check authentication
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    try {
+      const { action, remarks, previousStatus, newStatus, previousReviewer, newReviewer, metadata } = req.body;
+      const userId = req.session.userId;
+
+      const entry = await dbStorage.createSowAuditEntry({
+        sowId: req.params.id,
+        action,
+        performedBy: userId,
+        previousStatus,
+        newStatus,
+        previousReviewer,
+        newReviewer,
+        remarks,
+        metadata: metadata ? JSON.stringify(metadata) : undefined,
+      });
+
+      res.json(entry);
+    } catch (error) {
+      console.error("Audit trail error:", error);
+      res.status(500).json({ error: "Failed to create audit entry" });
+    }
+  });
+
+  // Revert SOW to previous stage
+  app.post("/api/sows/:id/revert", async (req, res) => {
+    // Check authentication
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    try {
+      const { toStatus, remarks } = req.body;
+      const userId = req.session.userId;
+
+      if (!remarks) {
+        return res.status(400).json({ error: "Remarks are required" });
+      }
+
+      const sow = await dbStorage.getSowById(req.params.id);
+      if (!sow) {
+        return res.status(404).json({ error: "SOW not found" });
+      }
+
+      const previousStatus = sow.status;
+
+      // Update SOW status
+      const updatedSow = await dbStorage.updateSow(req.params.id, {
+        status: toStatus,
+      });
+
+      // Create audit trail entry
+      await dbStorage.createSowAuditEntry({
+        sowId: req.params.id,
+        action: 'stage_revert',
+        performedBy: userId,
+        previousStatus,
+        newStatus: toStatus,
+        remarks,
+      });
+
+      res.json(updatedSow);
+    } catch (error) {
+      console.error("Revert error:", error);
+      res.status(500).json({ error: "Failed to revert SOW" });
+    }
+  });
+
+  // Reassign reviewer
+  app.post("/api/sows/:id/reassign", async (req, res) => {
+    // Check authentication
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    try {
+      const { toReviewer, remarks } = req.body;
+      const userId = req.session.userId;
+
+      if (!remarks) {
+        return res.status(400).json({ error: "Remarks are required" });
+      }
+
+      // Get current approval
+      const approvals = await dbStorage.getSowApprovals(req.params.id);
+      if (!approvals || approvals.length === 0) {
+        return res.status(404).json({ error: "No approval record found" });
+      }
+
+      const currentApproval = approvals[0];
+      const previousReviewerId = currentApproval.reviewerId;
+
+      // Update approval reviewer
+      const updatedApproval = await dbStorage.updateSowApproval(currentApproval.id, {
+        reviewerId: toReviewer,
+        status: 'pending',
+        comments: null,
+        reviewedAt: null,
+      });
+
+      // Create audit trail entry
+      await dbStorage.createSowAuditEntry({
+        sowId: req.params.id,
+        action: 'reviewer_change',
+        performedBy: userId,
+        previousReviewer: previousReviewerId || undefined,
+        newReviewer: toReviewer,
+        remarks,
+      });
+
+      res.json(updatedApproval);
+    } catch (error) {
+      console.error("Reassign error:", error);
+      res.status(500).json({ error: "Failed to reassign reviewer" });
+    }
+  });
+
   // Export route
   app.post("/api/sows/:id/export", async (req, res) => {
     try {

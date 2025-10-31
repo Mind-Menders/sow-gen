@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { sows, templates, users, workflows, sowApprovals, type Sow, type Template, type User, type UpsertUser, type Workflow, type SowApproval, type InsertSow, type InsertTemplate, type InsertUser, type InsertWorkflow, type InsertSowApproval } from "@shared/schema";
+import { sows, templates, users, workflows, sowApprovals, sowAuditTrail, type Sow, type Template, type User, type UpsertUser, type Workflow, type SowApproval, type InsertSow, type InsertTemplate, type InsertUser, type InsertWorkflow, type InsertSowApproval, type SowAuditTrail, type InsertSowAuditTrail } from "@shared/schema";
 import type { IStorage } from "./storage";
 
 export class PostgresStorage implements IStorage {
@@ -161,5 +161,32 @@ export class PostgresStorage implements IStorage {
 
   async getSowApprovalsBySowId(sowId: string): Promise<SowApproval[]> {
     return await db.select().from(sowApprovals).where(eq(sowApprovals.sowId, sowId));
+  }
+
+  async getSowApprovals(sowId: string): Promise<SowApproval[]> {
+    return await db.select().from(sowApprovals).where(eq(sowApprovals.sowId, sowId));
+  }
+
+  async updateSowApproval(id: string, updates: Partial<SowApproval>): Promise<SowApproval | null> {
+    const result = await db.update(sowApprovals)
+      .set(updates)
+      .where(eq(sowApprovals.id, id))
+      .returning();
+    return result[0] || null;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return result[0];
+  }
+
+  // Audit Trail methods
+  async createSowAuditEntry(entry: InsertSowAuditTrail): Promise<SowAuditTrail> {
+    const result = await db.insert(sowAuditTrail).values(entry).returning();
+    return result[0];
+  }
+
+  async getSowAuditTrail(sowId: string): Promise<SowAuditTrail[]> {
+    return await db.select().from(sowAuditTrail).where(eq(sowAuditTrail.sowId, sowId));
   }
 }

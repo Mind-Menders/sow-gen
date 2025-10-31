@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import ReactQuill, { Quill } from "react-quill";
-import { ArrowLeft, Save, Download, Sparkles, Check, CheckCircle2, Clock, XCircle, FileDown, Users2, Copy, Ban, CheckSquare } from "lucide-react";
+import { ArrowLeft, Save, Download, Sparkles, Check, CheckCircle2, Clock, XCircle, FileDown, Users2, Copy, Ban, CheckSquare, History, UserCog, RotateCcw } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,10 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Sow, SowSections, SowApproval, Workflow, User } from "@shared/schema";
+import type { Sow, SowSections, SowApproval, Workflow, User, SowAuditTrail } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { format } from "date-fns";
 
 // Register custom table blots to preserve table HTML
 const BlockEmbed = Quill.import('blots/block/embed');
@@ -103,6 +105,14 @@ export default function Editor() {
   const [exportFormat, setExportFormat] = useState<"pdf" | "word">("pdf");
   const [exportHeader, setExportHeader] = useState("");
   const [exportFooter, setExportFooter] = useState("");
+  const [revertDialogOpen, setRevertDialogOpen] = useState(false);
+  const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
+  const [revertStatus, setRevertStatus] = useState("");
+  const [reassignReviewer, setReassignReviewer] = useState("");
+  const [actionRemarks, setActionRemarks] = useState("");
+  const [newSectionDialogOpen, setNewSectionDialogOpen] = useState(false);
+  const [newSectionTitle, setNewSectionTitle] = useState("");
+  const [newSectionIcon, setNewSectionIcon] = useState("");
   const debouncedEditContent = useDebounce(editContent, 2000);
 
   const { data: sow, isLoading } = useQuery<Sow>({
@@ -123,6 +133,11 @@ export default function Editor() {
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
     enabled: !!sow?.workflowId,
+  });
+
+  const { data: auditTrail = [] } = useQuery<SowAuditTrail[]>({
+    queryKey: sowId ? [`/api/sows/${sowId}/audit`] : ["/api/audit"],
+    enabled: !!sowId,
   });
 
   useEffect(() => {
@@ -372,11 +387,120 @@ export default function Editor() {
     },
   });
 
+  const revertStageMutation = useMutation({
+    mutationFn: async ({ toStatus, remarks }: { toStatus: string; remarks: string }) => {
+      return apiRequest("POST", `/api/sows/${sowId}/revert`, {
+        toStatus,
+        remarks,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}/audit`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+      toast({
+        title: "Stage Reverted",
+        description: "SOW has been reverted to the previous stage.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Revert Failed",
+        description: "Could not revert SOW stage. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const reassignReviewerMutation = useMutation({
+    mutationFn: async ({ toReviewer, remarks }: { toReviewer: string; remarks: string }) => {
+      return apiRequest("POST", `/api/sows/${sowId}/reassign`, {
+        toReviewer,
+        remarks,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}/approvals`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}/audit`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+      toast({
+        title: "Reviewer Reassigned",
+        description: "SOW has been reassigned to a different reviewer.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Reassign Failed",
+        description: "Could not reassign reviewer. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleApplySuggestion = () => {
     if (aiSuggestion) {
       setEditContent(aiSuggestion);
       setAiSuggestion("");
       setHasUnsavedChanges(true);
+    }
+  };
+
+  const handleAddNewSection = async () => {
+    if (!newSectionTitle.trim()) {
+      toast({
+        title: "Invalid Input",
+        description: "Section title is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const sectionId = newSectionTitle.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    
+    if (sections[sectionId]) {
+      toast({
+        title: "Section Exists",
+        description: "A section with this name already exists",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const updatedSections = {
+      ...sections,
+      [sectionId]: {
+        id: sectionId,
+        icon: newSectionIcon.toUpperCase().substring(0, 2) || newSectionTitle.substring(0, 2).toUpperCase(),
+        title: newSectionTitle,
+        content: "",
+      },
+    };
+
+    setSections(updatedSections);
+
+    if (sowId) {
+      try {
+        await apiRequest("PATCH", `/api/sows/${sowId}`, {
+          sections: JSON.stringify(updatedSections),
+        });
+        queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+        toast({
+          title: "Section Added",
+          description: "New section has been added successfully",
+        });
+        setNewSectionDialogOpen(false);
+        setNewSectionTitle("");
+        setNewSectionIcon("");
+        setSelectedSection(sectionId);
+      } catch (error) {
+        toast({
+          title: "Failed to Add Section",
+          description: "Could not add the new section. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -466,101 +590,162 @@ export default function Editor() {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="w-full mx-auto p-8 space-y-6">
-        {/* Project Title */}
-        <h1 className="text-2xl font-bold text-foreground mb-2" data-testid="sow-title">
-          {sow.title}
-        </h1>
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="destructive" 
-            size="lg"
-            onClick={() => setLocation("/")} 
-            data-testid="button-back"
-            className="gap-2"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Dashboard
-          </Button>
-          <div>
-            {statusConfig[sow.status as keyof typeof statusConfig] ? (
-              <Badge variant={statusConfig[sow.status as keyof typeof statusConfig].variant} className="text-xs">
-                {statusConfig[sow.status as keyof typeof statusConfig].label}
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="text-xs">
-                Unknown Status
-              </Badge>
-            )}
-          </div>
-          <p className="text-sm font-mono text-muted-foreground" data-testid="text-sow-number">#{sow.sowNumber}</p>
-          {/* Approval Status */}
-          {currentApproval && (
-            <div className="mt-3 flex items-center gap-2">
-              {(() => {
-                const ApprovalIcon = approvalStatusConfig[currentApproval.status as keyof typeof approvalStatusConfig]?.icon || Clock;
-                return (
-                  <>
-                    <ApprovalIcon className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">
-                      Approval: <span className="font-medium">{approvalStatusConfig[currentApproval.status as keyof typeof approvalStatusConfig]?.label || currentApproval.status}</span>
-                      {currentApproval.currentStage !== undefined && ` (Stage ${currentApproval.currentStage})`}
-                    </span>
-                  </>
-                );
-              })()}
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            {/* Edit Project Details */}
-            <Button 
-              variant="outline" 
-              onClick={() => setLocation(`/editsow?id=${sowId}`)}
-              data-testid="button-edit-details"
-            >
-              Edit Details
-            </Button>
-            
-            {/* Copy SOW */}
-            <Button 
-              variant="outline" 
-              onClick={() => copySowMutation.mutate()}
-              disabled={copySowMutation.isPending}
-              data-testid="button-copy-sow"
-            >
-              <Copy className="w-4 h-4 mr-2" />
-              {copySowMutation.isPending ? "Copying..." : "Copy"}
-            </Button>
-            
-            {/* Cancel SOW - only show if not already rejected */}
-            {sow.status !== "rejected" && (
-              <Button 
-                variant="outline" 
-                onClick={() => cancelSowMutation.mutate()}
-                disabled={cancelSowMutation.isPending}
-                data-testid="button-cancel-sow"
-              >
-                <Ban className="w-4 h-4 mr-2" />
-                {cancelSowMutation.isPending ? "Cancelling..." : "Cancel"}
-              </Button>
-            )}
-            
-            <Button variant="outline" onClick={handleExport} data-testid="button-export">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="button-save">
-              <Save className="w-4 h-4 mr-2" />
-              {saveMutation.isPending ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </div>
+        {/* Header Panel */}
+        <Card className="border-card-border">
+          <CardContent className="pt-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setLocation("/")} 
+                    data-testid="button-back"
+                    className="gap-2 -ml-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back
+                  </Button>
+                  <div className="h-4 w-px bg-border" />
+                  <p className="text-sm font-mono text-muted-foreground" data-testid="text-sow-number">
+                    #{sow.sowNumber}
+                  </p>
+                </div>
+                <h1 className="text-2xl font-bold text-foreground mb-3" data-testid="sow-title">
+                  {sow.title}
+                </h1>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Status Badge */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Status:</span>
+                    {statusConfig[sow.status as keyof typeof statusConfig] ? (
+                      <Badge variant={statusConfig[sow.status as keyof typeof statusConfig].variant} className="text-xs">
+                        {statusConfig[sow.status as keyof typeof statusConfig].label}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs">
+                        Unknown Status
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {/* Approval Status */}
+                  {currentApproval && (
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-px bg-border" />
+                      {(() => {
+                        const ApprovalIcon = approvalStatusConfig[currentApproval.status as keyof typeof approvalStatusConfig]?.icon || Clock;
+                        return (
+                          <>
+                            <ApprovalIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">
+                              {approvalStatusConfig[currentApproval.status as keyof typeof approvalStatusConfig]?.label || currentApproval.status}
+                              {currentApproval.currentStage !== undefined && ` (Stage ${currentApproval.currentStage})`}
+                            </span>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
 
+                  {/* Completion Status */}
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-px bg-border" />
+                    <span className="text-xs text-muted-foreground">
+                      Completion: <span className="font-medium">{completedSections}/{sectionsList.length}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setLocation(`/editsow?id=${sowId}`)}
+                  data-testid="button-edit-details"
+                >
+                  Edit Details
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => copySowMutation.mutate()}
+                  disabled={copySowMutation.isPending}
+                  data-testid="button-copy-sow"
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  {copySowMutation.isPending ? "Copying..." : "Copy"}
+                </Button>
+                
+                {sow.status !== "rejected" && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => cancelSowMutation.mutate()}
+                    disabled={cancelSowMutation.isPending}
+                    data-testid="button-cancel-sow"
+                  >
+                    <Ban className="w-4 h-4 mr-2" />
+                    {cancelSowMutation.isPending ? "Cancelling..." : "Cancel"}
+                  </Button>
+                )}
+                
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleExport} 
+                  data-testid="button-export"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export
+                </Button>
+                
+                <Button 
+                  size="sm"
+                  onClick={() => saveMutation.mutate()} 
+                  disabled={saveMutation.isPending} 
+                  data-testid="button-save"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {saveMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Tabs defaultValue="editor" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="editor">Editor</TabsTrigger>
+            <TabsTrigger value="review">
+              <Users2 className="w-4 h-4 mr-2" />
+              Review and Approvals
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="editor" className="mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-[18px] pl-[1px] pr-[1px] ml-[1px] mr-[1px] pt-[1px] pb-[1px]">
           <div className="lg:col-span-1">
             <Card className="border-card-border sticky top-6">
               <CardHeader>
-                <CardTitle className="text-base">Document Sections</CardTitle>
-                <p className="text-xs text-muted-foreground">Click to edit a section</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base">Document Sections</CardTitle>
+                    <p className="text-xs text-muted-foreground">Click to edit a section</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setNewSectionDialogOpen(true)}
+                    className="gap-1"
+                  >
+                    <span className="text-lg">+</span>
+                    Add
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-2">
                 {sectionsList.map(([key, section], index) => {
@@ -600,178 +785,6 @@ export default function Editor() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Reviewers Card */}
-            {workflow && (
-              <Card className="border-card-border mt-6">
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Users2 className="w-4 h-4" />
-                    Reviewers & Approvals
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground">Track review status</p>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {(() => {
-                    try {
-                      if (!workflow.stages) {
-                        return <p className="text-xs text-muted-foreground">No workflow stages defined</p>;
-                      }
-
-                      const stagesData = typeof workflow.stages === "string" 
-                        ? JSON.parse(workflow.stages) 
-                        : workflow.stages;
-                      
-                      // Handle both array and object formats
-                      const stages = Array.isArray(stagesData) ? stagesData : [];
-                      
-                      if (stages.length === 0) {
-                        return <p className="text-xs text-muted-foreground">No review stages configured</p>;
-                      }
-
-                      // Find the first stage with at least one reviewer who has not reviewed
-                      let currentStageIdx = -1;
-                      for (let i = 0; i < stages.length; i++) {
-                        const stage = stages[i];
-                        const stageReviewers = (stage.reviewerIds || [])
-                          .map((reviewerId: string) => users.find((u) => u.id === reviewerId))
-                          .filter(Boolean);
-                        const hasPending = stageReviewers.some((reviewer: any) => {
-                          const reviewerApproval = approvals?.find(
-                            (approval) => approval.reviewerId === reviewer.id && approval.currentStage === i
-                          );
-                          return !(reviewerApproval && reviewerApproval.reviewedAt);
-                        });
-                        if (hasPending && currentStageIdx === -1) {
-                          currentStageIdx = i;
-                        }
-                      }
-                      // If all reviewers in all stages have reviewed, set currentStageIdx beyond last stage
-                      if (currentStageIdx === -1) {
-                        currentStageIdx = stages.length;
-                      }
-
-                      return stages.map((stage: any, stageIdx: number) => {
-                        const stageReviewers = (stage.reviewerIds || [])
-                          .map((reviewerId: string) => users.find((u) => u.id === reviewerId))
-                          .filter(Boolean);
-
-                        const isCurrentStage = stageIdx === currentStageIdx;
-                        const isPastStage = stageIdx < currentStageIdx;
-
-                        return (
-                          <div key={stage.id || stageIdx} className="border rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <Badge variant={isPastStage ? "default" : isCurrentStage ? "secondary" : "outline"} className="text-xs">
-                                  Stage {stageIdx + 1}
-                                </Badge>
-                                <span className="text-sm font-medium">{stage.name}</span>
-                              </div>
-                              {isPastStage && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                              {isCurrentStage && <Clock className="w-4 h-4 text-yellow-600" />}
-                            </div>
-
-                            <div className="space-y-2 mt-2">
-                              {stageReviewers.map((reviewer: any) => {
-                                // Debug: log user, reviewer, and button logic
-                                if (user && reviewer) {
-                                  const reviewerApproval = approvals?.find(
-                                    (approval) => approval.reviewerId === reviewer.id && approval.currentStage === stage.stage
-                                  );
-                                  const hasReviewed = !!(reviewerApproval && reviewerApproval.reviewedAt);
-                                  const isCurrentUser = user && (
-                                    reviewer.id === user.id ||
-                                    (reviewer.email && user.email && reviewer.email === user.email) ||
-                                    ((reviewer.firstName && reviewer.lastName && user.firstName && user.lastName) &&
-                                      reviewer.firstName.toLowerCase() === user.firstName.toLowerCase() &&
-                                      reviewer.lastName.toLowerCase() === user.lastName.toLowerCase())
-                                  );
-                                  console.log('Logged-in user:', user);
-                                  console.log('Reviewer:', reviewer);
-                                  console.log('isCurrentStage:', isCurrentStage, 'hasReviewed:', hasReviewed, 'reviewerApproval:', reviewerApproval, 'isCurrentUser:', isCurrentUser);
-                                }
-                                // Debug: log user and reviewer
-                                if (user && reviewer) {
-                                  console.log('Logged-in user:', user);
-                                  console.log('Reviewer:', reviewer);
-                                }
-                                if (!reviewer) return null;
-                                // Check all approvals to see if this reviewer has reviewed
-                                const reviewerApproval = approvals?.find(
-                                  (approval) => approval.reviewerId === reviewer.id && approval.currentStage === stage.stage
-                                );
-                                const hasReviewed = !!(reviewerApproval && reviewerApproval.reviewedAt);
-
-
-                                // Only show the button for the logged-in reviewer (by id, email, or name)
-                                const isCurrentUser = user && (
-                                  reviewer.id === user.id ||
-                                  (reviewer.email && user.email && reviewer.email === user.email) ||
-                                  ((reviewer.firstName && reviewer.lastName && user.firstName && user.lastName) &&
-                                    reviewer.firstName.toLowerCase() === user.firstName.toLowerCase() &&
-                                    reviewer.lastName.toLowerCase() === user.lastName.toLowerCase())
-                                );
-
-                                return (
-                                  <div key={reviewer.id} className="flex items-center justify-between text-xs">
-                                    <div className="flex items-center gap-2">
-                                      <div className={`w-2 h-2 rounded-full ${hasReviewed ? 'bg-green-600' : 'bg-gray-300'}`} />
-                                      <span>{reviewer.firstName} {reviewer.lastName}</span>
-                                    </div>
-                                    {isCurrentStage && !hasReviewed && isCurrentUser && (
-                                      <Button
-                                        size="sm"
-                                        variant="destructive"
-                                        className="h-6 text-xs flex items-center gap-1"
-                                        onClick={() => {
-                                          // Find the approval record for this reviewer and stage
-                                          const approval = approvals?.find(
-                                            (a) => a.reviewerId === reviewer.id && a.currentStage === stageIdx
-                                          );
-                                          console.log('Mark Reviewed clicked', {
-                                            approvalId: approval?.id,
-                                            reviewerId: reviewer.id
-                                          });
-                                          if (approval?.id && reviewer.id) {
-                                            markAsReviewedMutation.mutate({
-                                              approvalId: approval.id,
-                                              reviewerId: reviewer.id,
-                                            });
-                                          } else {
-                                            alert('Approval record not found for this reviewer/stage.');
-                                          }
-                                        }}
-                                        disabled={markAsReviewedMutation.isPending}
-                                      >
-                                        <CheckSquare className="w-4 h-4 mr-1" />
-                                        {markAsReviewedMutation.isPending ? "..." : "Mark Reviewed"}
-                                      </Button>
-                                    )}
-                                    {hasReviewed && (
-                                      <span className="text-muted-foreground">Reviewed</span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      });
-                    } catch (e) {
-                      console.error("Error parsing workflow stages:", e);
-                      console.log("Workflow stages data:", workflow.stages);
-                      return (
-                        <div className="text-xs text-muted-foreground">
-                          <p>Unable to load reviewers</p>
-                          <p className="text-red-500 mt-1">Check console for details</p>
-                        </div>
-                      );
-                    }
-                  })()}
-                </CardContent>
-              </Card>
-            )}
           </div>
 
           <div className="lg:col-span-2 space-y-6">
@@ -889,7 +902,483 @@ export default function Editor() {
             </Card>
           </div>
         </div>
+          </TabsContent>
+
+          <TabsContent value="review" className="mt-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Reviewers & Approvals Card */}
+              {workflow && (
+                <Card className="border-card-border">
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Users2 className="w-4 h-4" />
+                      Reviewers & Approvals
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">Track review status</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {(() => {
+                      try {
+                        if (!workflow.stages) {
+                          return <p className="text-xs text-muted-foreground">No workflow stages defined</p>;
+                        }
+
+                        const stagesData = typeof workflow.stages === "string" 
+                          ? JSON.parse(workflow.stages) 
+                          : workflow.stages;
+                        
+                        // Handle both array and object formats
+                        const stages = Array.isArray(stagesData) ? stagesData : [];
+                        
+                        if (stages.length === 0) {
+                          return <p className="text-xs text-muted-foreground">No review stages configured</p>;
+                        }
+
+                        // Find the first stage with at least one reviewer who has not reviewed
+                        let currentStageIdx = -1;
+                        for (let i = 0; i < stages.length; i++) {
+                          const stage = stages[i];
+                          const stageReviewers = (stage.reviewerIds || [])
+                            .map((reviewerId: string) => users.find((u) => u.id === reviewerId))
+                            .filter(Boolean);
+                          const hasPending = stageReviewers.some((reviewer: any) => {
+                            const reviewerApproval = approvals?.find(
+                              (approval) => approval.reviewerId === reviewer.id && approval.currentStage === i
+                            );
+                            return !(reviewerApproval && reviewerApproval.reviewedAt);
+                          });
+                          if (hasPending && currentStageIdx === -1) {
+                            currentStageIdx = i;
+                          }
+                        }
+                        // If all reviewers in all stages have reviewed, set currentStageIdx beyond last stage
+                        if (currentStageIdx === -1) {
+                          currentStageIdx = stages.length;
+                        }
+
+                        return stages.map((stage: any, stageIdx: number) => {
+                          const stageReviewers = (stage.reviewerIds || [])
+                            .map((reviewerId: string) => users.find((u) => u.id === reviewerId))
+                            .filter(Boolean);
+
+                          const isCurrentStage = stageIdx === currentStageIdx;
+                          const isPastStage = stageIdx < currentStageIdx;
+
+                          return (
+                            <div key={stage.id || stageIdx} className="border rounded-lg p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant={isPastStage ? "default" : isCurrentStage ? "secondary" : "outline"} className="text-xs">
+                                    Stage {stageIdx + 1}
+                                  </Badge>
+                                  <span className="text-sm font-medium">{stage.name}</span>
+                                </div>
+                                {isPastStage && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                                {isCurrentStage && <Clock className="w-4 h-4 text-yellow-600" />}
+                              </div>
+
+                              <div className="space-y-2 mt-2">
+                                {stageReviewers.map((reviewer: any) => {
+                                  // Debug: log user, reviewer, and button logic
+                                  if (user && reviewer) {
+                                    const reviewerApproval = approvals?.find(
+                                      (approval) => approval.reviewerId === reviewer.id && approval.currentStage === stage.stage
+                                    );
+                                    const hasReviewed = !!(reviewerApproval && reviewerApproval.reviewedAt);
+                                    const isCurrentUser = user && (
+                                      reviewer.id === user.id ||
+                                      (reviewer.email && user.email && reviewer.email === user.email) ||
+                                      ((reviewer.firstName && reviewer.lastName && user.firstName && user.lastName) &&
+                                        reviewer.firstName.toLowerCase() === user.firstName.toLowerCase() &&
+                                        reviewer.lastName.toLowerCase() === user.lastName.toLowerCase())
+                                    );
+                                    console.log('Logged-in user:', user);
+                                    console.log('Reviewer:', reviewer);
+                                    console.log('isCurrentStage:', isCurrentStage, 'hasReviewed:', hasReviewed, 'reviewerApproval:', reviewerApproval, 'isCurrentUser:', isCurrentUser);
+                                  }
+                                  // Debug: log user and reviewer
+                                  if (user && reviewer) {
+                                    console.log('Logged-in user:', user);
+                                    console.log('Reviewer:', reviewer);
+                                  }
+                                  if (!reviewer) return null;
+                                  // Check all approvals to see if this reviewer has reviewed
+                                  const reviewerApproval = approvals?.find(
+                                    (approval) => approval.reviewerId === reviewer.id && approval.currentStage === stage.stage
+                                  );
+                                  const hasReviewed = !!(reviewerApproval && reviewerApproval.reviewedAt);
+
+
+                                  // Only show the button for the logged-in reviewer (by id, email, or name)
+                                  const isCurrentUser = user && (
+                                    reviewer.id === user.id ||
+                                    (reviewer.email && user.email && reviewer.email === user.email) ||
+                                    ((reviewer.firstName && reviewer.lastName && user.firstName && user.lastName) &&
+                                      reviewer.firstName.toLowerCase() === user.firstName.toLowerCase() &&
+                                      reviewer.lastName.toLowerCase() === user.lastName.toLowerCase())
+                                  );
+
+                                  return (
+                                    <div key={reviewer.id} className="flex items-center justify-between text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <div className={`w-2 h-2 rounded-full ${hasReviewed ? 'bg-green-600' : 'bg-gray-300'}`} />
+                                        <span>{reviewer.firstName} {reviewer.lastName}</span>
+                                      </div>
+                                      {isCurrentStage && !hasReviewed && isCurrentUser && (
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          className="h-6 text-xs flex items-center gap-1"
+                                          onClick={() => {
+                                            // Find the approval record for this reviewer and stage
+                                            const approval = approvals?.find(
+                                              (a) => a.reviewerId === reviewer.id && a.currentStage === stageIdx
+                                            );
+                                            console.log('Mark Reviewed clicked', {
+                                              approvalId: approval?.id,
+                                              reviewerId: reviewer.id
+                                            });
+                                            if (approval?.id && reviewer.id) {
+                                              markAsReviewedMutation.mutate({
+                                                approvalId: approval.id,
+                                                reviewerId: reviewer.id,
+                                              });
+                                            } else {
+                                              alert('Approval record not found for this reviewer/stage.');
+                                            }
+                                          }}
+                                          disabled={markAsReviewedMutation.isPending}
+                                        >
+                                          <CheckSquare className="w-4 h-4 mr-1" />
+                                          {markAsReviewedMutation.isPending ? "..." : "Mark Reviewed"}
+                                        </Button>
+                                      )}
+                                      {hasReviewed && (
+                                        <span className="text-muted-foreground">Reviewed</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        });
+                      } catch (e) {
+                        console.error("Error parsing workflow stages:", e);
+                        console.log("Workflow stages data:", workflow.stages);
+                        return (
+                          <div className="text-xs text-muted-foreground">
+                            <p>Unable to load reviewers</p>
+                            <p className="text-red-500 mt-1">Check console for details</p>
+                          </div>
+                        );
+                      }
+                    })()}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Audit Trail Card */}
+            <Card className="border-card-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="w-5 h-5" />
+                  Audit Trail
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Track all changes, status updates, and reviewer assignments
+                </p>
+              </CardHeader>
+              <CardContent>
+                {auditTrail && auditTrail.length > 0 ? (
+                  <div className="space-y-4">
+                    {auditTrail.map((entry) => (
+                      <div key={entry.id} className="border-l-2 border-primary pl-4 pb-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="font-medium text-sm">
+                              {entry.action === 'status_change' && 'Status Changed'}
+                              {entry.action === 'reviewer_change' && 'Reviewer Reassigned'}
+                              {entry.action === 'stage_revert' && 'Stage Reverted'}
+                              {entry.action === 'created' && 'SOW Created'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {entry.createdAt && format(new Date(entry.createdAt), 'PPpp')}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-sm space-y-1">
+                          {entry.previousStatus && entry.newStatus && (
+                            <p>
+                              <span className="text-muted-foreground">Status:</span>{' '}
+                              <Badge variant="outline" className="text-xs">{entry.previousStatus}</Badge>
+                              {' → '}
+                              <Badge variant="outline" className="text-xs">{entry.newStatus}</Badge>
+                            </p>
+                          )}
+                          {entry.previousReviewer && entry.newReviewer && (
+                            <p>
+                              <span className="text-muted-foreground">Reviewer:</span>{' '}
+                              {users.find(u => u.id === entry.previousReviewer)?.name || entry.previousReviewer}
+                              {' → '}
+                              {users.find(u => u.id === entry.newReviewer)?.name || entry.newReviewer}
+                            </p>
+                          )}
+                          {entry.performedBy && (
+                            <p>
+                              <span className="text-muted-foreground">Performed by:</span>{' '}
+                              {users.find(u => u.id === entry.performedBy)?.name || entry.performedBy}
+                            </p>
+                          )}
+                          {entry.remarks && (
+                            <div className="mt-2 p-2 bg-muted rounded-md">
+                              <p className="text-xs text-muted-foreground mb-1">Remarks:</p>
+                              <p className="text-sm">{entry.remarks}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No audit trail entries yet
+                  </p>
+                )}
+
+                {/* Action Buttons */}
+                <div className="mt-6 pt-6 border-t space-y-3">
+                  <h3 className="font-medium text-sm mb-3">Administrative Actions</h3>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setRevertDialogOpen(true)}
+                      disabled={!sow || sow.status === 'draft'}
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Revert to Previous Stage
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setReassignDialogOpen(true)}
+                      disabled={!workflow}
+                    >
+                      <UserCog className="w-4 h-4 mr-2" />
+                      Reassign Reviewer
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
+
+      {/* Revert Stage Dialog */}
+      <Dialog open={revertDialogOpen} onOpenChange={setRevertDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="w-5 h-5" />
+              Revert to Previous Stage
+            </DialogTitle>
+            <DialogDescription>
+              Select the status to revert to and provide remarks for audit trail
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="revert-status">Target Status</Label>
+              <Select value={revertStatus} onValueChange={setRevertStatus}>
+                <SelectTrigger id="revert-status">
+                  <SelectValue placeholder="Select status..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="in_review">In Review</SelectItem>
+                  <SelectItem value="pending_approval">Pending Approval</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="revert-remarks">Remarks *</Label>
+              <Textarea
+                id="revert-remarks"
+                placeholder="Explain why this SOW is being reverted..."
+                value={actionRemarks}
+                onChange={(e) => setActionRemarks(e.target.value)}
+                className="min-h-[100px]"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Remarks are required and will be recorded in the audit trail
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setRevertDialogOpen(false);
+              setRevertStatus("");
+              setActionRemarks("");
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (revertStatus && actionRemarks.trim()) {
+                  revertStageMutation.mutate({
+                    toStatus: revertStatus,
+                    remarks: actionRemarks
+                  });
+                  setRevertDialogOpen(false);
+                  setRevertStatus("");
+                  setActionRemarks("");
+                }
+              }}
+              disabled={!revertStatus || !actionRemarks.trim() || revertStageMutation.isPending}
+            >
+              {revertStageMutation.isPending ? "Reverting..." : "Revert Stage"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reassign Reviewer Dialog */}
+      <Dialog open={reassignDialogOpen} onOpenChange={setReassignDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCog className="w-5 h-5" />
+              Reassign Reviewer
+            </DialogTitle>
+            <DialogDescription>
+              Select a new reviewer and provide remarks for audit trail
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reassign-reviewer">New Reviewer</Label>
+              <Select value={reassignReviewer} onValueChange={setReassignReviewer}>
+                <SelectTrigger id="reassign-reviewer">
+                  <SelectValue placeholder="Select reviewer..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map((user) => (
+                    <SelectItem key={user.id} value={user.id.toString()}>
+                      {user.name} ({user.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="reassign-remarks">Remarks *</Label>
+              <Textarea
+                id="reassign-remarks"
+                placeholder="Explain why this reviewer is being reassigned..."
+                value={actionRemarks}
+                onChange={(e) => setActionRemarks(e.target.value)}
+                className="min-h-[100px]"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Remarks are required and will be recorded in the audit trail
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setReassignDialogOpen(false);
+              setReassignReviewer("");
+              setActionRemarks("");
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (reassignReviewer && actionRemarks.trim()) {
+                  reassignReviewerMutation.mutate({
+                    toReviewer: reassignReviewer,
+                    remarks: actionRemarks
+                  });
+                  setReassignDialogOpen(false);
+                  setReassignReviewer("");
+                  setActionRemarks("");
+                }
+              }}
+              disabled={!reassignReviewer || !actionRemarks.trim() || reassignReviewerMutation.isPending}
+            >
+              {reassignReviewerMutation.isPending ? "Reassigning..." : "Reassign Reviewer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add New Section Dialog */}
+      <Dialog open={newSectionDialogOpen} onOpenChange={setNewSectionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Section</DialogTitle>
+            <DialogDescription>
+              Create a custom section for your Statement of Work
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="section-title">Section Title *</Label>
+              <Input
+                id="section-title"
+                placeholder="e.g., Risk Management, Budget, Dependencies..."
+                value={newSectionTitle}
+                onChange={(e) => setNewSectionTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newSectionTitle.trim()) {
+                    handleAddNewSection();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="section-icon">Section Icon (Optional)</Label>
+              <Input
+                id="section-icon"
+                placeholder="2 letters, e.g., RM, BG, DP..."
+                value={newSectionIcon}
+                onChange={(e) => setNewSectionIcon(e.target.value.substring(0, 2))}
+                maxLength={2}
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave empty to auto-generate from title
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setNewSectionDialogOpen(false);
+              setNewSectionTitle("");
+              setNewSectionIcon("");
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddNewSection}
+              disabled={!newSectionTitle.trim()}
+            >
+              Add Section
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Export Dialog */}
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>

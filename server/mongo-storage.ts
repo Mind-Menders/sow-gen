@@ -1,6 +1,6 @@
 import { MongoClient, Db, Collection, ObjectId } from "mongodb";
 import { hash } from "bcrypt";
-import { type Sow, type InsertSow, type Template, type InsertTemplate, type User, type InsertUser, type UpsertUser, type Workflow, type InsertWorkflow, type SowApproval, type InsertSowApproval } from "@shared/schema";
+import { type Sow, type InsertSow, type Template, type InsertTemplate, type User, type InsertUser, type UpsertUser, type Workflow, type InsertWorkflow, type SowApproval, type InsertSowApproval, type SowAuditTrail, type InsertSowAuditTrail } from "@shared/schema";
 import { type IStorage } from "./storage";
 
 function generateSowNumber(): string {
@@ -137,6 +137,20 @@ interface MongoSowApproval {
   createdAt: Date;
 }
 
+interface MongoSowAuditTrail {
+  _id: ObjectId;
+  sowId: string;
+  action: string;
+  performedBy: string;
+  previousStatus: string | null;
+  newStatus: string | null;
+  previousReviewer: string | null;
+  newReviewer: string | null;
+  remarks: string | null;
+  metadata: string | null;
+  createdAt: Date;
+}
+
 export class MongoStorage implements IStorage {
   private client: MongoClient;
   private db: Db | null = null;
@@ -145,6 +159,7 @@ export class MongoStorage implements IStorage {
   private usersCollection: Collection<MongoUser> | null = null;
   private workflowsCollection: Collection<MongoWorkflow> | null = null;
   private approvalsCollection: Collection<MongoSowApproval> | null = null;
+  private auditTrailCollection: Collection<MongoSowAuditTrail> | null = null;
   private connected: boolean = false;
 
   constructor(uri: string) {
@@ -160,7 +175,8 @@ export class MongoStorage implements IStorage {
     this.templatesCollection = this.db.collection<MongoTemplate>("templates");
     this.usersCollection = this.db.collection<MongoUser>("users");
     this.workflowsCollection = this.db.collection<MongoWorkflow>("workflows");
-  this.approvalsCollection = this.db.collection<MongoSowApproval>("sow_approvals");
+    this.approvalsCollection = this.db.collection<MongoSowApproval>("sow_approvals");
+    this.auditTrailCollection = this.db.collection<MongoSowAuditTrail>("sow_audit_trail");
     this.connected = true;
 
     await this.initializeDefaultData();
@@ -698,6 +714,60 @@ export class MongoStorage implements IStorage {
       reviewedAt: result.reviewedAt,
       createdAt: result.createdAt,
     };
+  }
+
+  async getSowApprovals(sowId: string): Promise<SowApproval[]> {
+    return await this.getSowApprovalsBySowId(sowId);
+  }
+
+  // Audit Trail methods
+  async createSowAuditEntry(entry: InsertSowAuditTrail): Promise<SowAuditTrail> {
+    await this.ensureConnected();
+    const mongoEntry = {
+      _id: new ObjectId(),
+      sowId: entry.sowId,
+      action: entry.action,
+      performedBy: entry.performedBy,
+      previousStatus: entry.previousStatus || null,
+      newStatus: entry.newStatus || null,
+      previousReviewer: entry.previousReviewer || null,
+      newReviewer: entry.newReviewer || null,
+      remarks: entry.remarks || null,
+      metadata: entry.metadata || null,
+      createdAt: new Date(),
+    };
+    await this.auditTrailCollection!.insertOne(mongoEntry);
+    return {
+      id: mongoEntry._id.toHexString(),
+      sowId: mongoEntry.sowId,
+      action: mongoEntry.action,
+      performedBy: mongoEntry.performedBy,
+      previousStatus: mongoEntry.previousStatus,
+      newStatus: mongoEntry.newStatus,
+      previousReviewer: mongoEntry.previousReviewer,
+      newReviewer: mongoEntry.newReviewer,
+      remarks: mongoEntry.remarks,
+      metadata: mongoEntry.metadata,
+      createdAt: mongoEntry.createdAt,
+    } as SowAuditTrail;
+  }
+
+  async getSowAuditTrail(sowId: string): Promise<SowAuditTrail[]> {
+    await this.ensureConnected();
+    const mongoEntries = await this.auditTrailCollection!.find({ sowId }).sort({ createdAt: -1 }).toArray();
+    return mongoEntries.map((entry: any) => ({
+      id: entry._id.toHexString(),
+      sowId: entry.sowId,
+      action: entry.action,
+      performedBy: entry.performedBy,
+      previousStatus: entry.previousStatus,
+      newStatus: entry.newStatus,
+      previousReviewer: entry.previousReviewer,
+      newReviewer: entry.newReviewer,
+      remarks: entry.remarks,
+      metadata: entry.metadata,
+      createdAt: entry.createdAt,
+    }));
   }
 
   async close(): Promise<void> {

@@ -1,4 +1,4 @@
-import { type Sow, type InsertSow, type Template, type InsertTemplate, type User, type InsertUser, type UpsertUser, type Workflow, type InsertWorkflow, type SowApproval, type InsertSowApproval } from "@shared/schema";
+import { type Sow, type InsertSow, type Template, type InsertTemplate, type User, type InsertUser, type UpsertUser, type Workflow, type InsertWorkflow, type SowApproval, type InsertSowApproval, type SowAuditTrail, type InsertSowAuditTrail } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -28,8 +28,12 @@ export interface IStorage {
   deleteWorkflow(id: string): Promise<boolean>;
   
   createSowApproval(approval: InsertSowApproval): Promise<SowApproval>;
+  getSowApprovals(sowId: string): Promise<SowApproval[]>;
   getSowApprovalsBySowId(sowId: string): Promise<SowApproval[]>;
   updateSowApproval(id: string, updates: Partial<SowApproval>): Promise<SowApproval | null>;
+  
+  createSowAuditEntry(entry: InsertSowAuditTrail): Promise<SowAuditTrail>;
+  getSowAuditTrail(sowId: string): Promise<SowAuditTrail[]>;
 }
 
 function generateSowNumber(): string {
@@ -100,6 +104,7 @@ export class MemStorage implements IStorage {
   private users: User[] = [];
   private workflows: Workflow[] = [];
   private sowApprovals: SowApproval[] = [];
+  private sowAuditTrail: SowAuditTrail[] = [];
 
   private initializeDefaultData() {
     const template1: Template = {
@@ -415,7 +420,11 @@ export class MemStorage implements IStorage {
   }
 
   async getSowApprovalsBySowId(sowId: string): Promise<SowApproval[]> {
-    return [];
+    return this.sowApprovals.filter(a => a.sowId === sowId);
+  }
+
+  async getSowApprovals(sowId: string): Promise<SowApproval[]> {
+    return this.sowApprovals.filter(a => a.sowId === sowId);
   }
 
   async updateSowApproval(id: string, updates: Partial<SowApproval>): Promise<SowApproval | null> {
@@ -427,6 +436,28 @@ export class MemStorage implements IStorage {
       ...updates,
     };
     return this.sowApprovals[index];
+  }
+
+  async createSowAuditEntry(entry: InsertSowAuditTrail): Promise<SowAuditTrail> {
+    const auditEntry: SowAuditTrail = {
+      id: randomUUID(),
+      ...entry,
+      previousReviewer: entry.previousReviewer || null,
+      newReviewer: entry.newReviewer || null,
+      previousStatus: entry.previousStatus || null,
+      newStatus: entry.newStatus || null,
+      remarks: entry.remarks || null,
+      metadata: entry.metadata || null,
+      createdAt: new Date(),
+    };
+    this.sowAuditTrail.push(auditEntry);
+    return auditEntry;
+  }
+
+  async getSowAuditTrail(sowId: string): Promise<SowAuditTrail[]> {
+    return this.sowAuditTrail
+      .filter(entry => entry.sowId === sowId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 }
 

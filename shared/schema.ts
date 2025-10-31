@@ -99,6 +99,20 @@ export const sowApprovals = pgTable("sow_approvals", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const sowAuditTrail = pgTable("sow_audit_trail", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sowId: varchar("sow_id").notNull().references(() => sows.id),
+  action: text("action").notNull(), // 'status_change', 'reviewer_change', 'revert', 'comment'
+  performedBy: varchar("performed_by").notNull().references(() => users.id),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status"),
+  previousReviewer: varchar("previous_reviewer").references(() => users.id),
+  newReviewer: varchar("new_reviewer").references(() => users.id),
+  remarks: text("remarks"),
+  metadata: text("metadata"), // JSON string for additional data
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertSowSchema = createInsertSchema(sows).omit({
   id: true,
   createdAt: true,
@@ -128,6 +142,11 @@ export const insertSowApprovalSchema = createInsertSchema(sowApprovals).omit({
   createdAt: true,
 });
 
+export const insertSowAuditTrailSchema = createInsertSchema(sowAuditTrail).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertSow = z.infer<typeof insertSowSchema>;
 export type Sow = typeof sows.$inferSelect;
 
@@ -143,6 +162,9 @@ export type Workflow = typeof workflows.$inferSelect;
 
 export type InsertSowApproval = z.infer<typeof insertSowApprovalSchema>;
 export type SowApproval = typeof sowApprovals.$inferSelect;
+
+export type InsertSowAuditTrail = z.infer<typeof insertSowAuditTrailSchema>;
+export type SowAuditTrail = typeof sowAuditTrail.$inferSelect;
 
 export type SowType = typeof sowTypes[number];
 export type SowStatus = typeof sowStatuses[number];
