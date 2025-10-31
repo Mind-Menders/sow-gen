@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import ReactQuill from "react-quill";
 import { FileStack, Eye, Plus, Trash2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -275,14 +276,16 @@ export default function Templates() {
                           </div>
                           
                           <div className="space-y-2">
-                            <Label htmlFor={`section-content-${section.id}`}>Default Content</Label>
-                            <Textarea
-                              id={`section-content-${section.id}`}
-                              placeholder="Enter default content for this section (optional)"
-                              value={section.content}
-                              onChange={(e) => updateSection(section.id, "content", e.target.value)}
-                              className="min-h-[80px]"
-                            />
+                            <Label htmlFor={`section-content-${section.id}`}>Default Content (Rich Text)</Label>
+                            <div className="bg-white rounded border">
+                              <ReactQuill
+                                theme="snow"
+                                value={section.content}
+                                onChange={(value: string) => updateSection(section.id, "content", value)}
+                                placeholder="Enter default content for this section (optional)"
+                                style={{ minHeight: 80 }}
+                              />
+                            </div>
                           </div>
                         </div>
 
@@ -320,7 +323,7 @@ export default function Templates() {
 
       {/* Preview Template Dialog */}
       <Dialog open={!!previewTemplate} onOpenChange={() => setPreviewTemplate(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Template Preview</DialogTitle>
             <DialogDescription>{previewTemplate?.name}</DialogDescription>
@@ -342,9 +345,19 @@ export default function Templates() {
               }
 
               return Object.entries(sections).map(([key, s]) => (
-                <div key={key} className="border rounded p-3">
-                  <h3 className="font-semibold">{s?.title || key}</h3>
-                  <p className="text-sm text-muted-foreground mt-1">{s?.content || "(no content)"}</p>
+                <div key={key} className="border rounded p-4 bg-card">
+                  <h3 className="font-semibold text-base mb-2 flex items-center gap-2">
+                    {s?.icon && <span>{s.icon}</span>}
+                    {s?.title || key}
+                  </h3>
+                  {s?.content ? (
+                    <div 
+                      className="text-sm text-foreground prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: s.content }}
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">(no content)</p>
+                  )}
                 </div>
               ));
             })()}
