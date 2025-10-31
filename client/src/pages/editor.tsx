@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import ReactQuill from "react-quill";
+import ReactQuill, { Quill } from "react-quill";
 import { ArrowLeft, Save, Download, Sparkles, Check, CheckCircle2, Clock, XCircle, FileDown, Users2, Copy, Ban, CheckSquare } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,29 @@ import { useToast } from "@/hooks/use-toast";
 import type { Sow, SowSections, SowApproval, Workflow, User } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 
+// Register custom table blots to preserve table HTML
+const BlockEmbed = Quill.import('blots/block/embed');
+
+class TableBlot extends BlockEmbed {
+  static create(value: any) {
+    const node = super.create();
+    if (typeof value === 'string') {
+      node.innerHTML = value;
+    }
+    return node;
+  }
+
+  static value(node: HTMLElement) {
+    return node.innerHTML;
+  }
+}
+
+TableBlot.blotName = 'table-html';
+TableBlot.tagName = 'TABLE';
+TableBlot.className = 'pasted-table';
+
+Quill.register(TableBlot);
+
 const statusConfig = {
   initiated: { label: "Initiated", variant: "secondary" as const },
   in_review: { label: "In Review", variant: "default" as const },
@@ -24,7 +47,7 @@ const statusConfig = {
   rejected: { label: "Rejected", variant: "destructive" as const },
 };
 
-// Rich text editor configuration
+// Rich text editor configuration with enhanced table paste support
 const quillModules = {
   toolbar: [
     [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
@@ -36,11 +59,19 @@ const quillModules = {
     [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'indent': '-1'}, { 'indent': '+1' }],
     [{ 'align': [] }],
     ['blockquote', 'code-block'],
-    ['link', 'image'],
+    ['link', 'image', 'video'],
     ['clean']
   ],
   clipboard: {
     matchVisual: false,
+    matchers: [
+      ['table', (node: HTMLElement, delta: any) => {
+        // Preserve the entire table HTML structure
+        const tableHTML = node.outerHTML;
+        const Delta = Quill.import('delta');
+        return new Delta().insert({ 'table-html': tableHTML });
+      }]
+    ]
   }
 };
 
@@ -52,7 +83,8 @@ const quillFormats = [
   'list', 'bullet', 'indent',
   'align',
   'blockquote', 'code-block',
-  'link', 'image'
+  'link', 'image', 'video',
+  'table-html'
 ];
 
 export default function Editor() {
