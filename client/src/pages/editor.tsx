@@ -400,7 +400,7 @@ export default function Editor() {
   if (isLoading) {
     return (
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto p-8">
+        <div className="w-full mx-auto p-8">
           <div className="space-y-4">
             <div className="h-8 bg-muted rounded w-48 animate-pulse" />
             <div className="h-12 bg-muted rounded w-96 animate-pulse" />
@@ -413,7 +413,7 @@ export default function Editor() {
   if (!sow) {
     return (
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto p-8">
+        <div className="w-full mx-auto p-8">
           <p className="text-muted-foreground">SOW not found</p>
         </div>
       </div>
@@ -433,7 +433,7 @@ export default function Editor() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-7xl mx-auto p-8 space-y-6">
+      <div className="w-full mx-auto p-8 space-y-6">
         {/* Project Title */}
         <h1 className="text-2xl font-bold text-foreground mb-2" data-testid="sow-title">
           {sow.title}

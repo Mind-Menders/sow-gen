@@ -123,7 +123,7 @@ export default function EditSOW() {
   if (sowLoading) {
     return (
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto p-8 space-y-8">
+        <div className="w-full mx-auto p-8 space-y-8">
           <div className="flex items-center gap-4">
             <div className="h-10 w-32 bg-muted rounded animate-pulse" />
           </div>
@@ -137,7 +137,7 @@ export default function EditSOW() {
   if (!sow) {
     return (
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto p-8 space-y-8">
+        <div className="w-full mx-auto p-8 space-y-8">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-foreground">SOW Not Found</h1>
             <p className="text-muted-foreground mt-2">The requested SOW could not be found.</p>
@@ -152,7 +152,7 @@ export default function EditSOW() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-4xl mx-auto p-8 space-y-8">
+      <div className="w-full mx-auto p-8 space-y-8">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => setLocation("/")} data-testid="button-back-to-dashboard">
             <ArrowLeft className="w-4 h-4 mr-2" />

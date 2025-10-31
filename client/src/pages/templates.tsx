@@ -140,7 +140,7 @@ export default function Templates() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-7xl mx-auto p-8 space-y-8">
+      <div className="w-full mx-auto p-8 space-y-8">
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-foreground" data-testid="text-page-title">Template Library</h1>
