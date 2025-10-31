@@ -42,9 +42,15 @@ export default function Landing() {
       <div className="relative min-h-screen flex flex-col">
         <header className="flex items-center justify-between p-6">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary text-primary-foreground">
-              <FileText className="w-6 h-6" />
-            </div>
+            <div className="mb-4">
+          <div className="bg-[#D71921] px-3 py-4 rounded-lg shadow-lg">
+            <img 
+              src="https://c.ekstatic.net/ecl/logos/emirates/emirates-logo-badge.svg?h=d-52wmsnqryhi7L83BAKpg" 
+              alt="Emirates Logo" 
+              className="h-24 w-full object-contain"
+            />
+          </div>
+        </div><br></br>
             <h1 className="text-2xl font-bold text-foreground">SOW Gen.ai</h1>
           </div>
           <Button onClick={handleLogin} data-testid="button-login" className="gap-2">

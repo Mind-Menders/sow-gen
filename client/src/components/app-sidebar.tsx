@@ -153,16 +153,23 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="p-6 border-b">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-            <FileSignature className="w-6 h-6 text-white" />
+        {/* Emirates Logo - Full Width */}
+        <div className="mb-4">
+          <div className="bg-[#D71921] px-6 py-8 rounded-lg shadow-lg">
+            <img 
+              src="https://c.ekstatic.net/ecl/logos/emirates/emirates-logo-badge.svg?h=d-52wmsnqryhi7L83BAKpg" 
+              alt="Emirates Logo" 
+              className="h-24 w-full object-contain"
+            />
           </div>
-          <div className="space-y-1">
-            <h1 className="text-xl font-bold text-foreground" data-testid="text-app-title">
-              SOW Gen.ai
-            </h1>
-            <p className="text-xs text-muted-foreground" data-testid="text-app-edition">Enterprise Edition</p>
-          </div>
+        </div>
+        
+        <div className="space-y-1"><center>
+          <h1 className="text-xl font-bold text-foreground" data-testid="text-app-title">
+            SOW Gen.ai
+          </h1>
+          <p className="text-xs text-muted-foreground" data-testid="text-app-edition">Enterprise Edition</p>
+          </center>
         </div>
       </SidebarHeader>
       <SidebarContent className="px-3 py-6">

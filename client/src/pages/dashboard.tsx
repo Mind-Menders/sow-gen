@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { FileText, FileCheck, Clock, CheckCircle2, Plus, Filter, Search, User, Edit } from "lucide-react";
+import { FileText, FileCheck, Clock, CheckCircle2, Plus, Filter, Search, User, Edit, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -39,6 +40,7 @@ const statusConfig = {
 export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const { user } = useAuth();
 
   const { data: sows = [], isLoading } = useQuery<Sow[]>({
@@ -52,6 +54,15 @@ export default function Dashboard() {
   const filteredSows = sows.filter((sow) => {
     if (statusFilter !== "all" && sow.status !== statusFilter) return false;
     if (typeFilter !== "all" && sow.sowType !== typeFilter) return false;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        sow.title.toLowerCase().includes(query) ||
+        sow.sowNumber.toLowerCase().includes(query) ||
+        sow.vendorName.toLowerCase().includes(query) ||
+        sow.sponsor.toLowerCase().includes(query)
+      );
+    }
     return true;
   });
 
@@ -135,7 +146,19 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-4 justify-between">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 flex-1">
+            <div className="relative min-w-[300px] flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search by title, number, vendor, or sponsor..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+                data-testid="input-search"
+              />
+            </div>
+            
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[180px]" data-testid="select-status-filter">
                 <SelectValue placeholder="All Status" />
@@ -205,54 +228,60 @@ export default function Dashboard() {
             {filteredSows.map((sow) => {
               const initiator = users.find((u) => u.id === sow.createdBy);
               return (
-              <Card key={sow.id} className="border-card-border hover-elevate group" data-testid={`card-sow-${sow.id}`}>
-                <CardHeader className="space-y-3">
-                  {statusConfig[sow.status as keyof typeof statusConfig] ? (
-                    <Badge
-                      variant={statusConfig[sow.status as keyof typeof statusConfig].variant}
-                      className={
-                        `w-fit uppercase text-xs font-semibold` +
-                        (sow.status === "ready_for_submission" ? " bg-green-600 text-white" : "")
-                      }
-                    >
-                      {statusConfig[sow.status as keyof typeof statusConfig].label}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="w-fit uppercase text-xs font-semibold">
-                      Unknown Status
-                    </Badge>
-                  )}
-                  <h3 className="text-lg font-semibold text-foreground line-clamp-2" data-testid={`text-sow-title-${sow.id}`}>
-                    {sow.title}
-                  </h3>
-                  <p className="text-sm font-mono text-muted-foreground" data-testid={`text-sow-number-${sow.id}`}>
-                    #{sow.sowNumber}
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2 text-sm">
-                    <p className="text-foreground" data-testid={`text-vendor-${sow.id}`}>{sow.vendorName}</p>
-                    <p className="text-muted-foreground">
-                      <span className="font-medium">Sponsor:</span> {sow.sponsor}
-                    </p>
-                    {initiator && (
-                      <p className="text-muted-foreground flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        <span className="font-medium">Initiated by:</span> {initiator.firstName} {initiator.lastName}
-                      </p>
+              <Link key={sow.id} href={`/editor?id=${sow.id}`}>
+                <Card 
+                  className="border-card-border hover-elevate group cursor-pointer transition-all duration-300 relative overflow-hidden" 
+                  data-testid={`card-sow-${sow.id}`}
+                >
+                  <CardHeader className="space-y-3 pr-16">
+                    {statusConfig[sow.status as keyof typeof statusConfig] ? (
+                      <Badge
+                        variant={statusConfig[sow.status as keyof typeof statusConfig].variant}
+                        className={
+                          `w-fit uppercase text-xs font-semibold` +
+                          (sow.status === "ready_for_submission" ? " bg-green-600 text-white" : "")
+                        }
+                      >
+                        {statusConfig[sow.status as keyof typeof statusConfig].label}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="w-fit uppercase text-xs font-semibold">
+                        Unknown Status
+                      </Badge>
                     )}
-                    <p className="text-muted-foreground">{format(new Date(sow.createdAt), "MMM dd, yyyy")}</p>
-                    <Badge variant="outline" className="text-xs">{sow.sowType}</Badge>
+                    <h3 className="text-lg font-semibold text-foreground line-clamp-2" data-testid={`text-sow-title-${sow.id}`}>
+                      {sow.title}
+                    </h3>
+                    <p className="text-sm font-mono text-muted-foreground" data-testid={`text-sow-number-${sow.id}`}>
+                      #{sow.sowNumber}
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-4 pr-16">
+                    <div className="space-y-2 text-sm">
+                      <p className="text-foreground" data-testid={`text-vendor-${sow.id}`}>{sow.vendorName}</p>
+                      <p className="text-muted-foreground">
+                        <span className="font-medium">Sponsor:</span> {sow.sponsor}
+                      </p>
+                      {initiator && (
+                        <p className="text-muted-foreground flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          <span className="font-medium">Initiated by:</span> {initiator.firstName} {initiator.lastName}
+                        </p>
+                      )}
+                      <p className="text-muted-foreground">{format(new Date(sow.createdAt), "MMM dd, yyyy")}</p>
+                      <Badge variant="outline" className="text-xs">{sow.sowType}</Badge>
+                    </div>
+                  </CardContent>
+                  
+                  {/* Arrow Button on Right */}
+                  <div 
+                    className="absolute right-0 top-0 bottom-0 w-16 bg-white/20 backdrop-blur-sm flex items-center justify-center transition-all duration-300 group-hover:w-20 group-hover:bg-destructive border-l border-white/30"
+                    data-testid={`button-open-${sow.id}`}
+                  >
+                    <ArrowRight className="w-6 h-6 text-white transition-all duration-300 group-hover:translate-x-1" />
                   </div>
-                  <div className="flex gap-2">
-                    <Link href={`/editor?id=${sow.id}`}>
-                      <Button variant="destructive" className="flex-1" data-testid={`button-open-${sow.id}`}>
-                        Open
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
+                </Card>
+              </Link>
               );
             })}
           </div>

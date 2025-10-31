@@ -28,6 +28,37 @@ const sowTypeOptions = [
   "Flexi Sourcing - Fixed Scope",
 ];
 
+// Rich text editor configuration with table support
+const quillModules = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+    [{ 'font': [] }],
+    [{ 'size': ['small', false, 'large', 'huge'] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'color': [] }, { 'background': [] }],
+    [{ 'script': 'sub'}, { 'script': 'super' }],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'indent': '-1'}, { 'indent': '+1' }],
+    [{ 'align': [] }],
+    ['blockquote', 'code-block'],
+    ['link', 'image'],
+    ['clean']
+  ],
+  clipboard: {
+    matchVisual: false,
+  }
+};
+
+const quillFormats = [
+  'header', 'font', 'size',
+  'bold', 'italic', 'underline', 'strike',
+  'color', 'background',
+  'script',
+  'list', 'bullet', 'indent',
+  'align',
+  'blockquote', 'code-block',
+  'link', 'image'
+];
+
 export default function Templates() {
   const { toast } = useToast();
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
@@ -282,10 +313,15 @@ export default function Templates() {
                                 theme="snow"
                                 value={section.content}
                                 onChange={(value: string) => updateSection(section.id, "content", value)}
-                                placeholder="Enter default content for this section (optional)"
-                                style={{ minHeight: 80 }}
+                                placeholder="Enter default content for this section (optional). Paste from Word to preserve formatting."
+                                modules={quillModules}
+                                formats={quillFormats}
+                                style={{ minHeight: 200 }}
                               />
                             </div>
+                            <p className="text-xs text-muted-foreground">
+                              Supports formatting, lists, images, and paste from Word documents
+                            </p>
                           </div>
                         </div>
 

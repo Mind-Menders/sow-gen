@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import ReactQuill from "react-quill";
 import { ArrowLeft, Save, Download, Sparkles, Check, CheckCircle2, Clock, XCircle, FileDown, Users2, Copy, Ban, CheckSquare } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,37 @@ const statusConfig = {
   ready_for_submission: { label: "Ready for Submission", variant: "default" as const },
   rejected: { label: "Rejected", variant: "destructive" as const },
 };
+
+// Rich text editor configuration
+const quillModules = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+    [{ 'font': [] }],
+    [{ 'size': ['small', false, 'large', 'huge'] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'color': [] }, { 'background': [] }],
+    [{ 'script': 'sub'}, { 'script': 'super' }],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'indent': '-1'}, { 'indent': '+1' }],
+    [{ 'align': [] }],
+    ['blockquote', 'code-block'],
+    ['link', 'image'],
+    ['clean']
+  ],
+  clipboard: {
+    matchVisual: false,
+  }
+};
+
+const quillFormats = [
+  'header', 'font', 'size',
+  'bold', 'italic', 'underline', 'strike',
+  'color', 'background',
+  'script',
+  'list', 'bullet', 'indent',
+  'align',
+  'blockquote', 'code-block',
+  'link', 'image'
+];
 
 export default function Editor() {
   const { user } = useAuth();
@@ -407,8 +439,15 @@ export default function Editor() {
           {sow.title}
         </h1>
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => setLocation("/")} data-testid="button-back">
-            <ArrowLeft className="w-4 h-4 mr-2" />
+          <Button 
+            variant="destructive" 
+            size="lg"
+            onClick={() => setLocation("/")} 
+            data-testid="button-back"
+            className="gap-2"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back to Dashboard
           </Button>
           <div>
             {statusConfig[sow.status as keyof typeof statusConfig] ? (
@@ -716,16 +755,23 @@ export default function Editor() {
                   <p className="text-sm text-muted-foreground">Edit this section of your Statement of Work</p>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Textarea
-                    value={editContent}
-                    onChange={(e) => handleContentChange(e.target.value)}
-                    placeholder={`Enter ${sections[selectedSection].title.toLowerCase()} content...`}
-                    className="min-h-[300px] resize-none"
-                    data-testid="textarea-content"
-                  />
+                  <div className="bg-white rounded border" data-testid="textarea-content">
+                    <ReactQuill
+                      theme="snow"
+                      value={editContent}
+                      onChange={handleContentChange}
+                      placeholder={`Enter ${sections[selectedSection].title.toLowerCase()} content... Paste from Word to preserve formatting.`}
+                      modules={quillModules}
+                      formats={quillFormats}
+                      style={{ minHeight: 300 }}
+                    />
+                  </div>
                   {hasUnsavedChanges && (
                     <p className="text-xs text-muted-foreground">Auto-saving...</p>
                   )}
+                  <p className="text-xs text-muted-foreground">
+                    Supports rich formatting, tables (paste from Word), lists, images, and more
+                  </p>
                 </CardContent>
               </Card>
             )}
