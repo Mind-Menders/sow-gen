@@ -239,7 +239,8 @@ export class MongoStorage implements IStorage {
         vendorName: "TechCorp Solutions",
         sponsor: "John Smith",
         sowType: "New Vendor (RFT)",
-        status: "pending_approval",
+        // seed as pending_review to reflect workflow assigned
+        status: "pending_review",
         createdAt: new Date("2025-10-25"),
         updatedAt: new Date("2025-10-25"),
         sections: JSON.stringify(sampleSections1),
@@ -251,7 +252,8 @@ export class MongoStorage implements IStorage {
         vendorName: "AppBuilders Inc",
         sponsor: "Emily Davis",
         sowType: "Existing Vendor Enhancement",
-        status: "approved",
+        // map old approved -> ready_for_submission for seed data
+        status: "ready_for_submission",
         createdAt: new Date("2025-10-25"),
         updatedAt: new Date("2025-10-25"),
         sections: JSON.stringify(defaultSections),

@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, type IStorage } from "./storage";
 import { insertSowSchema, insertTemplateSchema, insertUserSchema, insertWorkflowSchema } from "@shared/schema";
-import { generateContentSuggestion } from "./openai";
+import { generateContentSuggestion, analyzeSectionQuality, getInlineSuggestion, chatWithAI, suggestSections } from "./openai";
 import { generatePDF, generateWord } from "./export";
 import { createAuthRouter } from "./auth";
 
@@ -91,12 +91,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/sows", async (req, res) => {
     try {
       const validated = insertSowSchema.parse(req.body);
-      const sow = await dbStorage.createSow(validated);
-      
-      // If a workflow is assigned, create approval records for all reviewers in all stages
+      let sow = await dbStorage.createSow(validated);
+
+      // If a workflow is assigned, ensure SOW status is pending_review and create approval records for all reviewers in all stages
       if (sow.workflowId) {
         try {
-          const workflow = await dbStorage.getWorkflowById(sow.workflowId);
+          if (sow.status !== 'pending_review') {
+            await dbStorage.updateSow(sow.id, { status: 'pending_review' });
+            sow = await dbStorage.getSowById(sow.id) as any;
+          }
+        } catch (e) {
+          console.warn('Failed to set sow status to pending_review', e);
+        }
+        try {
+          const workflow = sow.workflowId ? await dbStorage.getWorkflowById(sow.workflowId) : null;
           if (workflow && workflow.stages) {
             let stages;
             try {
@@ -454,6 +462,155 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI Section Analysis endpoint
+  app.post("/api/ai/analyze-section", async (req, res) => {
+    try {
+      const { sectionTitle, sectionContent, sowId } = req.body;
+      
+      if (!sectionTitle || !sowId) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const sow = await dbStorage.getSowById(sowId);
+      if (!sow) {
+        return res.status(404).json({ error: "SOW not found" });
+      }
+
+      const analysis = await analyzeSectionQuality(
+        sectionTitle,
+        sectionContent || "",
+        {
+          title: sow.title,
+          vendorName: sow.vendorName,
+          sowType: sow.sowType,
+        }
+      );
+
+      res.json(analysis);
+    } catch (error) {
+      console.error("AI analysis error:", error);
+      res.status(500).json({ error: "Failed to analyze section" });
+    }
+  });
+
+  // AI Inline Suggestion endpoint
+  app.post("/api/ai/inline-suggestion", async (req, res) => {
+    try {
+      const { sectionTitle, currentText, cursorContext, sowId } = req.body;
+      
+      if (!sectionTitle || !sowId) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const sow = await dbStorage.getSowById(sowId);
+      if (!sow) {
+        return res.status(404).json({ error: "SOW not found" });
+      }
+
+      const suggestion = await getInlineSuggestion(
+        sectionTitle,
+        currentText || "",
+        cursorContext || "",
+        {
+          title: sow.title,
+          vendorName: sow.vendorName,
+          sowType: sow.sowType,
+        }
+      );
+
+      res.json({ suggestion });
+    } catch (error) {
+      console.error("AI inline suggestion error:", error);
+      res.status(500).json({ error: "Failed to get suggestion" });
+    }
+  });
+
+  // AI Chat endpoint
+  app.post("/api/ai/chat", async (req, res) => {
+    try {
+      const { message, sowId, history } = req.body;
+      
+      if (!message || !sowId) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const sow = await dbStorage.getSowById(sowId);
+      if (!sow) {
+        return res.status(404).json({ error: "SOW not found" });
+      }
+
+      let sections = {};
+      try {
+        sections = typeof sow.sections === "string" ? JSON.parse(sow.sections) : sow.sections;
+      } catch (e) {
+        sections = sow.sections || {};
+      }
+
+      const response = await chatWithAI(
+        message,
+        {
+          title: sow.title,
+          vendorName: sow.vendorName,
+          sowType: sow.sowType,
+          sections,
+          status: sow.status,
+        },
+        history || []
+      );
+
+      res.json({ response });
+    } catch (error) {
+      console.error("AI chat error:", error);
+      res.status(500).json({ error: "Failed to chat with AI" });
+    }
+  });
+
+  // AI Section Suggestions endpoint
+  app.post("/api/ai/suggest-sections", async (req, res) => {
+    try {
+      const { sowId } = req.body;
+      
+      if (!sowId) {
+        return res.status(400).json({ error: "Missing sowId" });
+      }
+
+      const sow = await dbStorage.getSowById(sowId);
+      if (!sow) {
+        return res.status(404).json({ error: "SOW not found" });
+      }
+
+      let sections = {};
+      try {
+        sections = typeof sow.sections === "string" ? JSON.parse(sow.sections) : sow.sections;
+      } catch (e) {
+        sections = sow.sections || {};
+      }
+
+      const existingSections = Object.values(sections).map((s: any) => s.title || "");
+
+      console.log("[AI] Calling suggestSections with:", {
+        title: sow.title,
+        vendorName: sow.vendorName,
+        sowType: sow.sowType,
+        existingSectionsCount: existingSections.length
+      });
+
+      const suggestions = await suggestSections({
+        title: sow.title,
+        vendorName: sow.vendorName,
+        sowType: sow.sowType,
+        requirements: sow.requirements || undefined,
+        existingSections,
+      });
+
+      console.log("[AI] Got suggestions:", suggestions.length);
+      res.json({ suggestions });
+    } catch (error) {
+      console.error("AI section suggestions error:", error);
+      res.status(500).json({ error: "Failed to get section suggestions" });
+    }
+  });
+
   // SOW Approvals routes
   app.get("/api/sows/:id/approvals", async (req, res) => {
     try {
@@ -510,6 +667,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!approval) {
         return res.status(404).json({ error: "Approval not found" });
       }
+      // Record an audit entry for this review action
+      try {
+        const userId = req.session?.userId || 'system';
+        await dbStorage.createSowAuditEntry({
+          sowId: approval.sowId,
+          action: 'reviewed',
+          performedBy: userId,
+          newStatus: status,
+          remarks: comments,
+          metadata: JSON.stringify({ approvalId: approval.id }),
+        });
+      } catch (auditErr) {
+        console.warn('Failed to create audit entry for review action', auditErr);
+      }
+      // When an approval is updated from pending -> approved, if the SOW is in pending_review,
+      // move it to in_review to reflect active review progress.
+      try {
+        if (status === 'approved') {
+          const sow = await dbStorage.getSowById(approval.sowId);
+          if (sow && sow.status === 'pending_review') {
+            const previousStatus = sow.status;
+            await dbStorage.updateSow(sow.id, { status: 'in_review' });
+            await dbStorage.createSowAuditEntry({
+              sowId: sow.id,
+              action: 'status_change',
+              performedBy: req.session.userId || 'system',
+              previousStatus,
+              newStatus: 'in_review',
+              remarks: 'Moved to In Review after approval activity',
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to transition SOW status after approval update', e);
+      }
       res.json(approval);
     } catch (error) {
       res.status(500).json({ error: "Failed to update approval" });
@@ -548,6 +740,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         remarks,
         metadata: metadata ? JSON.stringify(metadata) : undefined,
       });
+
+      // If the SOW was in pending_review and an audit action occurred (e.g., reviewer_change, comment, stage_revert),
+      // move it to in_review to indicate active review progress.
+      try {
+        const sow = await dbStorage.getSowById(req.params.id);
+        if (sow && sow.status === 'pending_review' && action && action !== 'created' && action !== 'status_change') {
+          const previous = sow.status;
+          await dbStorage.updateSow(sow.id, { status: 'in_review' });
+          await dbStorage.createSowAuditEntry({
+            sowId: sow.id,
+            action: 'status_change',
+            performedBy: userId,
+            previousStatus: previous,
+            newStatus: 'in_review',
+            remarks: `Auto-transitioned to in_review due to audit action: ${action}`,
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to auto-transition SOW status after audit entry', e);
+      }
 
       res.json(entry);
     } catch (error) {
@@ -641,6 +853,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newReviewer: toReviewer,
         remarks,
       });
+
+      // If SOW is pending_review, transition to in_review because reviewer reassignment is an audit action
+      try {
+        const sow = await dbStorage.getSowById(req.params.id);
+        if (sow && sow.status === 'pending_review') {
+          const previous = sow.status;
+          await dbStorage.updateSow(sow.id, { status: 'in_review' });
+          await dbStorage.createSowAuditEntry({
+            sowId: sow.id,
+            action: 'status_change',
+            performedBy: userId,
+            previousStatus: previous,
+            newStatus: 'in_review',
+            remarks: 'Auto-transitioned to in_review due to reviewer reassignment',
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to auto-transition SOW status after reviewer reassignment', e);
+      }
 
       res.json(updatedApproval);
     } catch (error) {

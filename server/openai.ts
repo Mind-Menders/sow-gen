@@ -172,3 +172,354 @@ export async function generateContentSuggestion(
     throw error;
   }
 }
+
+/**
+ * Generic AI completion function that can be used for any prompt
+ */
+async function aiComplete(systemPrompt: string, userPrompt: string, options: { maxTokens?: number } = {}): Promise<string> {
+  const maxTokens = options.maxTokens || 2048;
+  
+  console.log(`[AI] Provider=${AI_PROVIDER} Generic completion`);
+
+  if (AI_PROVIDER === "olama") {
+    const host = process.env.OLAMA_BASE_URL || "http://localhost:11434";
+    const model = process.env.OLAMA_MODEL || "llama2";
+    
+    try {
+      const ollama = new Ollama({ host });
+      const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+      
+      const response = await ollama.generate({
+        model,
+        prompt: fullPrompt,
+        stream: false,
+      });
+      
+      return response.response || "";
+    } catch (err: any) {
+      const causeCode = err?.cause?.code || err?.code;
+      if (causeCode === "ECONNREFUSED" && host.includes("localhost")) {
+        const ipv4Host = host.replace("localhost", "127.0.0.1");
+        console.warn("[AI:olama] Connection refused on localhost; retrying with 127.0.0.1");
+        const ollama = new Ollama({ host: ipv4Host });
+        
+        const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+        const response = await ollama.generate({
+          model,
+          prompt: fullPrompt,
+          stream: false,
+        });
+        
+        return response.response || "";
+      }
+      throw err;
+    }
+  }
+
+  if (AI_PROVIDER === "azure") {
+    const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+    const key = process.env.AZURE_OPENAI_KEY;
+    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+    if (!endpoint || !key || !deployment) throw new Error("Azure OpenAI not configured");
+
+    const url = `${endpoint.replace(/\/$/, "")}/openai/deployments/${deployment}/chat/completions?api-version=2024-11-01-preview`;
+    const body = {
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      max_tokens: maxTokens,
+    };
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "api-key": key },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content || "";
+  }
+
+  // Default: OpenAI integrations
+  const response = await openai.chat.completions.create({
+    model: process.env.AI_INTEGRATIONS_MODEL || "gpt-4o",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ],
+    max_completion_tokens: maxTokens,
+  });
+
+  return response.choices?.[0]?.message?.content || "";
+}
+
+/**
+ * Analyze SOW section content and provide quality insights
+ */
+export async function analyzeSectionQuality(
+  sectionTitle: string,
+  sectionContent: string,
+  sowContext: { title: string; vendorName: string; sowType: string }
+): Promise<{
+  score: number;
+  clarity: number;
+  completeness: number;
+  professionalism: number;
+  issues: string[];
+  suggestions: string[];
+  missingInfo: string[];
+}> {
+  const prompt = `Analyze this SOW section and provide a detailed quality assessment.
+
+Project: ${sowContext.title}
+Vendor: ${sowContext.vendorName}
+Section: ${sectionTitle}
+Content: ${sectionContent || "(empty)"}
+
+You MUST respond with ONLY a valid JSON object. Do not include any markdown formatting, code blocks, or explanatory text.
+Use this exact format:
+{"score": 85, "clarity": 90, "completeness": 80, "professionalism": 85, "issues": ["issue1"], "suggestions": ["suggestion1"], "missingInfo": ["missing1"]}
+
+Your response:`;
+
+  try {
+    const result = await aiComplete(
+      "You are an expert SOW quality analyst. You MUST respond ONLY with a valid JSON object, no markdown, no code blocks, no explanations.",
+      prompt,
+      { maxTokens: 1024 }
+    );
+    
+    // Clean up response - remove markdown code blocks if present
+    let jsonString = result.trim();
+    
+    // Remove ```json and ``` markers if present
+    if (jsonString.startsWith('```json')) {
+      jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (jsonString.startsWith('```')) {
+      jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+    
+    // Remove any leading/trailing text that's not part of JSON
+    const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonString = jsonMatch[0];
+    }
+    
+    console.log("[AI] Parsing JSON response:", jsonString.substring(0, 200));
+    
+    // Parse JSON response
+    const parsed = JSON.parse(jsonString.trim());
+    return {
+      score: typeof parsed.score === 'number' ? parsed.score : 0,
+      clarity: typeof parsed.clarity === 'number' ? parsed.clarity : 0,
+      completeness: typeof parsed.completeness === 'number' ? parsed.completeness : 0,
+      professionalism: typeof parsed.professionalism === 'number' ? parsed.professionalism : 0,
+      issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+      missingInfo: Array.isArray(parsed.missingInfo) ? parsed.missingInfo : []
+    };
+  } catch (error) {
+    console.error("[AI] Error analyzing section:", error);
+    // Return default values on error
+    return {
+      score: 0,
+      clarity: 0,
+      completeness: 0,
+      professionalism: 0,
+      issues: ["Analysis temporarily unavailable. Please try again."],
+      suggestions: [],
+      missingInfo: []
+    };
+  }
+}
+
+/**
+ * Get inline content suggestions based on current text
+ */
+export async function getInlineSuggestion(
+  sectionTitle: string,
+  currentText: string,
+  cursorContext: string,
+  sowContext: { title: string; vendorName: string; sowType: string }
+): Promise<string> {
+  const prompt = `You are an AI writing assistant for SOW documents.
+
+Project: ${sowContext.title}
+Section: ${sectionTitle}
+Current text: ${currentText}
+User is typing: "${cursorContext}"
+
+Suggest a short, relevant continuation (1-2 sentences max) that the user can insert. Be specific and contextual.
+Respond with ONLY the suggested text, no explanations.`;
+
+  try {
+    const result = await aiComplete(
+      "You are a helpful SOW writing assistant. Provide concise, contextual suggestions.",
+      prompt,
+      { maxTokens: 256 }
+    );
+    return result.trim();
+  } catch (error) {
+    console.error("[AI] Error getting inline suggestion:", error);
+    return "";
+  }
+}
+
+/**
+ * Chat with AI about the SOW
+ */
+export async function chatWithAI(
+  userMessage: string,
+  sowData: {
+    title: string;
+    vendorName: string;
+    sowType: string;
+    sections: any;
+    status: string;
+  },
+  conversationHistory: Array<{ role: string; content: string }>
+): Promise<string> {
+  const sowSummary = `
+Project: ${sowData.title}
+Vendor: ${sowData.vendorName}
+Type: ${sowData.sowType}
+Status: ${sowData.status}
+Sections: ${Object.keys(sowData.sections || {}).map(key => sowData.sections[key]?.title).filter(Boolean).join(", ")}
+  `.trim();
+
+  const systemPrompt = `You are an expert SOW assistant helping users create and improve Statement of Work documents.
+
+Current SOW Context:
+${sowSummary}
+
+Answer questions about the SOW, provide suggestions, and help users improve their content. Be concise and helpful.`;
+
+  try {
+    // Build conversation with history
+    let messages = conversationHistory.slice(-6); // Keep last 6 messages for context
+    messages.push({ role: "user", content: userMessage });
+    
+    // For providers that don't support conversation history, combine into one prompt
+    const combinedPrompt = messages.map(m => `${m.role}: ${m.content}`).join("\n\n");
+    
+    const result = await aiComplete(systemPrompt, combinedPrompt, { maxTokens: 512 });
+    return result.trim();
+  } catch (error) {
+    console.error("[AI] Error in chat:", error);
+    return "I'm sorry, I'm having trouble responding right now. Please try again.";
+  }
+}
+
+/**
+ * Suggest additional sections that would be beneficial for the SOW.
+ */
+export async function suggestSections(
+  sowContext: { 
+    title: string; 
+    vendorName: string; 
+    sowType: string;
+    requirements?: string;
+    existingSections: string[]; // Array of existing section titles
+  }
+): Promise<Array<{ title: string; icon: string; description: string }>> {
+  console.log(`[AI] Provider=${AI_PROVIDER} Suggesting sections for ${sowContext.sowType}`);
+  
+  const systemPrompt = "You are an expert SOW document consultant. Always return valid JSON arrays with no markdown.";
+  
+  const userPrompt = `You are an expert at structuring Statement of Work (SOW) documents.
+
+Current SOW Information:
+- Project: ${sowContext.title}
+- Vendor: ${sowContext.vendorName}
+- Type: ${sowContext.sowType}
+${sowContext.requirements ? `- Requirements: ${sowContext.requirements}` : ''}
+
+Existing Sections:
+${sowContext.existingSections.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+
+Based on the SOW type and existing sections, suggest 3-5 additional sections that would strengthen this SOW. Consider common enterprise SOW best practices.
+
+Return ONLY a valid JSON array with no code fences or markdown. Each object must have:
+- title: Section name (e.g., "Risk Management")
+- icon: Two-letter abbreviation (e.g., "RM")
+- description: Brief explanation of why this section is valuable (1 sentence)
+
+Example format:
+[
+  {
+    "title": "Risk Management",
+    "icon": "RM",
+    "description": "Identifies potential risks and mitigation strategies for project success."
+  }
+]`;
+
+  try {
+    const response = await aiComplete(systemPrompt, userPrompt, { maxTokens: 1024 });
+    
+    console.log("[AI] Raw section suggestions response:", response);
+    
+    // Robust JSON parsing
+    let cleaned = response.trim();
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+    
+    // Try to extract JSON array if embedded in text
+    const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      cleaned = jsonMatch[0];
+    }
+    
+    const suggestions = JSON.parse(cleaned);
+    
+    if (!Array.isArray(suggestions)) {
+      throw new Error("Response is not an array");
+    }
+    
+    // Validate structure
+    const validSuggestions = suggestions
+      .filter((s: any) => s.title && s.icon && s.description)
+      .map((s: any) => ({
+        title: String(s.title),
+        icon: String(s.icon).substring(0, 2).toUpperCase(),
+        description: String(s.description)
+      }))
+      .slice(0, 5); // Max 5 suggestions
+    
+    console.log("[AI] Parsed suggestions:", validSuggestions.length);
+    return validSuggestions;
+      
+  } catch (error) {
+    console.error("[AI] Failed to parse section suggestions:", error);
+    // Return fallback suggestions based on SOW type
+    console.log("[AI] Using fallback suggestions");
+    return getDefaultSectionSuggestions(sowContext.sowType, sowContext.existingSections);
+  }
+}
+
+/**
+ * Fallback section suggestions if AI parsing fails.
+ */
+function getDefaultSectionSuggestions(
+  sowType: string, 
+  existingSections: string[]
+): Array<{ title: string; icon: string; description: string }> {
+  const allSuggestions = [
+    { title: "Risk Management", icon: "RM", description: "Identifies potential risks and mitigation strategies for project success." },
+    { title: "Dependencies", icon: "DP", description: "Documents external dependencies and their impact on project timeline." },
+    { title: "Acceptance Criteria", icon: "AC", description: "Defines clear criteria for deliverable acceptance and sign-off." },
+    { title: "Change Management", icon: "CM", description: "Establishes process for handling scope changes and amendments." },
+    { title: "Communication Plan", icon: "CP", description: "Outlines communication protocols, meeting cadence, and reporting." },
+    { title: "Quality Assurance", icon: "QA", description: "Defines quality standards and testing requirements." },
+    { title: "Budget & Costs", icon: "BC", description: "Details cost breakdown, payment terms, and financial milestones." },
+    { title: "Training & Support", icon: "TS", description: "Specifies training requirements and ongoing support arrangements." },
+  ];
+  
+  // Filter out sections that already exist (fuzzy match)
+  const existingTitlesLower = existingSections.map(s => s.toLowerCase());
+  return allSuggestions
+    .filter(s => !existingTitlesLower.some(existing => 
+      existing.includes(s.title.toLowerCase()) || s.title.toLowerCase().includes(existing)
+    ))
+    .slice(0, 5);
+}
+

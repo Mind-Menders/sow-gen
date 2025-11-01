@@ -18,6 +18,9 @@ import { useToast } from "@/hooks/use-toast";
 import type { Sow, SowSections, SowApproval, Workflow, User, SowAuditTrail } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
+import { AIBadge, AIContainer } from "@/components/ai-badge";
+import { AIAnalysisPanel } from "@/components/ai-analysis-panel";
+import { AIChatAssistant } from "@/components/ai-chat-assistant";
 
 // Register custom table blots to preserve table HTML
 const BlockEmbed = Quill.import('blots/block/embed');
@@ -43,7 +46,9 @@ TableBlot.className = 'pasted-table';
 Quill.register(TableBlot);
 
 const statusConfig = {
+  draft: { label: "Draft", variant: "secondary" as const },
   initiated: { label: "Initiated", variant: "secondary" as const },
+  pending_review: { label: "Pending Review", variant: "default" as const },
   in_review: { label: "In Review", variant: "default" as const },
   ready_for_submission: { label: "Ready for Submission", variant: "default" as const },
   rejected: { label: "Rejected", variant: "destructive" as const },
@@ -113,6 +118,8 @@ export default function Editor() {
   const [newSectionDialogOpen, setNewSectionDialogOpen] = useState(false);
   const [newSectionTitle, setNewSectionTitle] = useState("");
   const [newSectionIcon, setNewSectionIcon] = useState("");
+  const [aiSuggestionsDialogOpen, setAiSuggestionsDialogOpen] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<Array<{ title: string; icon: string; description: string; selected: boolean }>>([]);
   const debouncedEditContent = useDebounce(editContent, 2000);
 
   const { data: sow, isLoading } = useQuery<Sow>({
@@ -308,6 +315,7 @@ export default function Editor() {
     onSuccess: async (data) => {
       console.log('Mark as reviewed success:', data);
       queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}/approvals`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}/audit`] });
       toast({
         title: "Marked as Reviewed",
         description: "Your review has been recorded.",
@@ -504,6 +512,86 @@ export default function Editor() {
     }
   };
 
+  const getSuggestedSectionsMutation = useMutation({
+    mutationFn: async () => {
+      if (!sowId) return;
+      return apiRequest("POST", "/api/ai/suggest-sections", { sowId });
+    },
+    onSuccess: (data: any) => {
+      if (data?.suggestions && Array.isArray(data.suggestions)) {
+        setAiSuggestions(data.suggestions.map((s: any) => ({ ...s, selected: true })));
+        setAiSuggestionsDialogOpen(true);
+      } else {
+        toast({
+          title: "No Suggestions",
+          description: "No additional sections recommended at this time.",
+        });
+      }
+    },
+    onError: () => {
+      toast({
+        title: "Failed",
+        description: "Could not get AI section suggestions. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleApplySuggestedSections = async () => {
+    const selectedSuggestions = aiSuggestions.filter(s => s.selected);
+    
+    if (selectedSuggestions.length === 0) {
+      toast({
+        title: "No Sections Selected",
+        description: "Please select at least one section to add.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const updatedSections = { ...sections };
+    
+    for (const suggestion of selectedSuggestions) {
+      const sectionId = suggestion.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      
+      // Skip if section already exists
+      if (updatedSections[sectionId]) {
+        continue;
+      }
+
+      updatedSections[sectionId] = {
+        id: sectionId,
+        icon: suggestion.icon,
+        title: suggestion.title,
+        content: "",
+      };
+    }
+
+    setSections(updatedSections);
+
+    if (sowId) {
+      try {
+        await apiRequest("PATCH", `/api/sows/${sowId}`, {
+          sections: JSON.stringify(updatedSections),
+        });
+        queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+        toast({
+          title: "Sections Added",
+          description: `${selectedSuggestions.length} section(s) added successfully`,
+        });
+        setAiSuggestionsDialogOpen(false);
+        setAiSuggestions([]);
+      } catch (error) {
+        toast({
+          title: "Failed to Add Sections",
+          description: "Could not add the suggested sections. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   const handleExport = () => {
     setExportDialogOpen(true);
   };
@@ -598,16 +686,16 @@ export default function Editor() {
                 <div className="flex items-center gap-3 mb-2">
                   <Button 
                     variant="ghost" 
-                    size="sm"
+                    size="default"
                     onClick={() => setLocation("/")} 
                     data-testid="button-back"
-                    className="gap-2 -ml-2"
+                    className="gap-2 -ml-2 h-10 px-4 rounded-lg transition-all hover:bg-accent"
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="w-5 h-5" />
                     Back
                   </Button>
-                  <div className="h-4 w-px bg-border" />
-                  <p className="text-sm font-mono text-muted-foreground" data-testid="text-sow-number">
+                  <div className="h-5 w-px bg-border" />
+                  <p className="text-lg font-bold font-mono text-foreground" data-testid="text-sow-number">
                     #{sow.sowNumber}
                   </p>
                 </div>
@@ -659,57 +747,62 @@ export default function Editor() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
                 <Button 
                   variant="outline" 
-                  size="sm"
-                  onClick={() => setLocation(`/editsow?id=${sowId}`)}
+                  size="default"
+                  onClick={() => setLocation(`/edit-sow?id=${sowId}`)}
                   data-testid="button-edit-details"
+                  className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
                 >
                   Edit Details
                 </Button>
                 
                 <Button 
                   variant="outline" 
-                  size="sm"
+                  size="default"
                   onClick={() => copySowMutation.mutate()}
                   disabled={copySowMutation.isPending}
                   data-testid="button-copy-sow"
+                  className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
                 >
-                  <Copy className="w-4 h-4 mr-2" />
+                  <Copy className="w-5 h-5 mr-2" />
                   {copySowMutation.isPending ? "Copying..." : "Copy"}
                 </Button>
                 
                 {sow.status !== "rejected" && (
                   <Button 
                     variant="outline" 
-                    size="sm"
+                    size="default"
                     onClick={() => cancelSowMutation.mutate()}
                     disabled={cancelSowMutation.isPending}
                     data-testid="button-cancel-sow"
+                    className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
                   >
-                    <Ban className="w-4 h-4 mr-2" />
+                    <Ban className="w-5 h-5 mr-2" />
                     {cancelSowMutation.isPending ? "Cancelling..." : "Cancel"}
                   </Button>
                 )}
                 
                 <Button 
                   variant="outline" 
-                  size="sm"
+                  size="default"
                   onClick={handleExport} 
                   data-testid="button-export"
+                  className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
                 >
-                  <Download className="w-4 h-4 mr-2" />
+                  <Download className="w-5 h-5 mr-2" />
                   Export
                 </Button>
                 
                 <Button 
-                  size="sm"
+                  size="default"
                   onClick={() => saveMutation.mutate()} 
                   disabled={saveMutation.isPending} 
                   data-testid="button-save"
+                  className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
                 >
-                  <Save className="w-4 h-4 mr-2" />
+                  <Save className="w-5 h-5 mr-2" />
                   {saveMutation.isPending ? "Saving..." : "Save"}
                 </Button>
               </div>
@@ -736,15 +829,28 @@ export default function Editor() {
                     <CardTitle className="text-base">Document Sections</CardTitle>
                     <p className="text-xs text-muted-foreground">Click to edit a section</p>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setNewSectionDialogOpen(true)}
-                    className="gap-1"
-                  >
-                    <span className="text-lg">+</span>
-                    Add
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => getSuggestedSectionsMutation.mutate()}
+                      disabled={getSuggestedSectionsMutation.isPending}
+                      className="gap-1 h-9 px-3 rounded-lg transition-all hover:shadow-md"
+                      title="AI Suggested Sections"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      {getSuggestedSectionsMutation.isPending ? "..." : "AI"}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setNewSectionDialogOpen(true)}
+                      className="gap-1 h-9 px-3 rounded-lg transition-all hover:shadow-md"
+                    >
+                      <span className="text-lg">+</span>
+                      Add
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -789,55 +895,70 @@ export default function Editor() {
 
           <div className="lg:col-span-2 space-y-6">
             {selectedSection && sections[selectedSection] && (
-              <Card className="border-card-border">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
-                      {sections[selectedSection].icon}
+              <>
+                {/* AI Analysis Panel moved to top */}
+                <AIContainer>
+                  <AIAnalysisPanel
+                    sowId={sowId!}
+                    sectionTitle={sections[selectedSection].title}
+                    sectionContent={editContent}
+                  />
+                </AIContainer>
+
+                <Card className="border-card-border">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
+                        {sections[selectedSection].icon}
+                      </div>
+                      {sections[selectedSection].title}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">Edit this section of your Statement of Work</p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="bg-white rounded border" data-testid="textarea-content">
+                      <ReactQuill
+                        theme="snow"
+                        value={editContent}
+                        onChange={handleContentChange}
+                        placeholder={`Enter ${sections[selectedSection].title.toLowerCase()} content... Paste from Word to preserve formatting.`}
+                        modules={quillModules}
+                        formats={quillFormats}
+                        style={{ minHeight: 300 }}
+                      />
                     </div>
-                    {sections[selectedSection].title}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">Edit this section of your Statement of Work</p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="bg-white rounded border" data-testid="textarea-content">
-                    <ReactQuill
-                      theme="snow"
-                      value={editContent}
-                      onChange={handleContentChange}
-                      placeholder={`Enter ${sections[selectedSection].title.toLowerCase()} content... Paste from Word to preserve formatting.`}
-                      modules={quillModules}
-                      formats={quillFormats}
-                      style={{ minHeight: 300 }}
-                    />
-                  </div>
-                  {hasUnsavedChanges && (
-                    <p className="text-xs text-muted-foreground">Auto-saving...</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Supports rich formatting, tables (paste from Word), lists, images, and more
-                  </p>
-                </CardContent>
-              </Card>
+                    {hasUnsavedChanges && (
+                      <p className="text-xs text-muted-foreground">Auto-saving...</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Supports rich formatting, tables (paste from Word), lists, images, and more
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
             )}
 
-            <Card className="border-card-border">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  AI Assistant
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">Generate content suggestions using AI</p>
-              </CardHeader>
+            <AIContainer>
+              <Card className="border-card-border">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <AIBadge tooltip="AI-Powered Content Generation">
+                      <Sparkles className="w-5 h-5 text-purple-600" />
+                      <span>AI Content Generator</span>
+                    </AIBadge>
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">Generate professional content suggestions using AI</p>
+                </CardHeader>
               <CardContent className="space-y-4">
                 <Button 
                   variant="outline" 
-                  className="w-full" 
+                  size="default"
+                  className="w-full h-11 rounded-lg transition-all hover:shadow-md" 
                   onClick={() => generateAiMutation.mutate()}
                   disabled={generateAiMutation.isPending || !selectedSection}
                   data-testid="button-generate-ai"
                 >
-                  <Sparkles className="w-4 h-4 mr-2" />
+                  <Sparkles className="w-5 h-5 mr-2" />
                   {generateAiMutation.isPending ? "Generating..." : "Generate Content"}
                 </Button>
                 
@@ -848,9 +969,9 @@ export default function Editor() {
                     </div>
                     <div className="flex gap-2">
                       <Button 
-                        size="sm" 
+                        size="default" 
                         variant="default"
-                        className="flex-1"
+                        className="flex-1 h-10 rounded-lg transition-all hover:shadow-md"
                         onClick={() => {
                           setEditContent(aiSuggestion);
                           setHasUnsavedChanges(true);
@@ -865,8 +986,9 @@ export default function Editor() {
                         Insert
                       </Button>
                       <Button 
-                        size="sm" 
+                        size="default" 
                         variant="outline"
+                        className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
                         onClick={() => {
                           navigator.clipboard.writeText(aiSuggestion);
                           toast({
@@ -879,8 +1001,9 @@ export default function Editor() {
                         Copy
                       </Button>
                       <Button 
-                        size="sm" 
+                        size="default" 
                         variant="ghost"
+                        className="h-10 px-5 rounded-lg transition-all hover:bg-accent"
                         onClick={() => setAiSuggestion("")}
                         data-testid="button-clear-ai"
                       >
@@ -900,6 +1023,7 @@ export default function Editor() {
                 </p>
               </CardContent>
             </Card>
+            </AIContainer>
           </div>
         </div>
           </TabsContent>
@@ -1152,18 +1276,22 @@ export default function Editor() {
                   <div className="flex gap-3">
                     <Button
                       variant="outline"
+                      size="default"
                       onClick={() => setRevertDialogOpen(true)}
                       disabled={!sow || sow.status === 'draft'}
+                      className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
                     >
-                      <RotateCcw className="w-4 h-4 mr-2" />
+                      <RotateCcw className="w-5 h-5 mr-2" />
                       Revert to Previous Stage
                     </Button>
                     <Button
                       variant="outline"
+                      size="default"
                       onClick={() => setReassignDialogOpen(true)}
                       disabled={!workflow}
+                      className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
                     >
-                      <UserCog className="w-4 h-4 mr-2" />
+                      <UserCog className="w-5 h-5 mr-2" />
                       Reassign Reviewer
                     </Button>
                   </div>
@@ -1197,8 +1325,8 @@ export default function Editor() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="pending_review">Pending Review</SelectItem>
                   <SelectItem value="in_review">In Review</SelectItem>
-                  <SelectItem value="pending_approval">Pending Approval</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1220,14 +1348,21 @@ export default function Editor() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setRevertDialogOpen(false);
-              setRevertStatus("");
-              setActionRemarks("");
-            }}>
+            <Button 
+              variant="outline" 
+              size="default"
+              className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
+              onClick={() => {
+                setRevertDialogOpen(false);
+                setRevertStatus("");
+                setActionRemarks("");
+              }}
+            >
               Cancel
             </Button>
             <Button
+              size="default"
+              className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
               onClick={() => {
                 if (revertStatus && actionRemarks.trim()) {
                   revertStageMutation.mutate({
@@ -1294,14 +1429,21 @@ export default function Editor() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setReassignDialogOpen(false);
-              setReassignReviewer("");
-              setActionRemarks("");
-            }}>
+            <Button 
+              variant="outline" 
+              size="default"
+              className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
+              onClick={() => {
+                setReassignDialogOpen(false);
+                setReassignReviewer("");
+                setActionRemarks("");
+              }}
+            >
               Cancel
             </Button>
             <Button
+              size="default"
+              className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
               onClick={() => {
                 if (reassignReviewer && actionRemarks.trim()) {
                   reassignReviewerMutation.mutate({
@@ -1363,18 +1505,99 @@ export default function Editor() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setNewSectionDialogOpen(false);
-              setNewSectionTitle("");
-              setNewSectionIcon("");
-            }}>
+            <Button 
+              variant="outline" 
+              size="default"
+              className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
+              onClick={() => {
+                setNewSectionDialogOpen(false);
+                setNewSectionTitle("");
+                setNewSectionIcon("");
+              }}
+            >
               Cancel
             </Button>
             <Button
+              size="default"
+              className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
               onClick={handleAddNewSection}
               disabled={!newSectionTitle.trim()}
             >
               Add Section
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Suggested Sections Dialog */}
+      <Dialog open={aiSuggestionsDialogOpen} onOpenChange={setAiSuggestionsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-600" />
+              AI Recommended Sections
+            </DialogTitle>
+            <DialogDescription>
+              Select sections to add to your SOW based on AI analysis
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-4 max-h-[400px] overflow-y-auto">
+            {aiSuggestions.map((suggestion, index) => (
+              <div 
+                key={index}
+                className="flex items-start gap-3 p-4 border rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
+                onClick={() => {
+                  const updated = [...aiSuggestions];
+                  updated[index].selected = !updated[index].selected;
+                  setAiSuggestions(updated);
+                }}
+              >
+                <div className="flex items-center h-6">
+                  <input
+                    type="checkbox"
+                    checked={suggestion.selected}
+                    onChange={(e) => {
+                      const updated = [...aiSuggestions];
+                      updated[index].selected = e.target.checked;
+                      setAiSuggestions(updated);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-4 h-4 rounded border-gray-300"
+                  />
+                </div>
+                <div className="flex-shrink-0">
+                  <div className="w-10 h-10 rounded-md bg-purple-100 text-purple-600 flex items-center justify-center text-sm font-bold">
+                    {suggestion.icon}
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-sm mb-1">{suggestion.title}</h4>
+                  <p className="text-xs text-muted-foreground">{suggestion.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              size="default"
+              className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
+              onClick={() => {
+                setAiSuggestionsDialogOpen(false);
+                setAiSuggestions([]);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="default"
+              className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
+              onClick={handleApplySuggestedSections}
+              disabled={aiSuggestions.filter(s => s.selected).length === 0}
+            >
+              Add {aiSuggestions.filter(s => s.selected).length} Section(s)
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1414,30 +1637,38 @@ export default function Editor() {
             {/* Header */}
             <div className="space-y-2">
               <Label htmlFor="export-header">Document Header (Optional)</Label>
-              <Textarea
-                id="export-header"
-                placeholder="e.g., CONFIDENTIAL - Internal Use Only&#10;Company Name&#10;Date: {date}"
-                value={exportHeader}
-                onChange={(e) => setExportHeader(e.target.value)}
-                className="min-h-[80px]"
-              />
+              <div className="bg-white rounded border">
+                <ReactQuill
+                  theme="snow"
+                  value={exportHeader}
+                  onChange={setExportHeader}
+                  placeholder="Add header content with images, logos, or formatted text..."
+                  modules={quillModules}
+                  formats={quillFormats}
+                  style={{ minHeight: 150 }}
+                />
+              </div>
               <p className="text-xs text-muted-foreground">
-                This will appear at the top of the exported document
+                Supports rich formatting and images. This will appear at the top of the exported document.
               </p>
             </div>
 
             {/* Footer */}
             <div className="space-y-2">
               <Label htmlFor="export-footer">Document Footer (Optional)</Label>
-              <Textarea
-                id="export-footer"
-                placeholder="e.g., © 2025 Company Name. All rights reserved.&#10;Page {page} of {total}"
-                value={exportFooter}
-                onChange={(e) => setExportFooter(e.target.value)}
-                className="min-h-[80px]"
-              />
+              <div className="bg-white rounded border">
+                <ReactQuill
+                  theme="snow"
+                  value={exportFooter}
+                  onChange={setExportFooter}
+                  placeholder="Add footer content with images, logos, or formatted text..."
+                  modules={quillModules}
+                  formats={quillFormats}
+                  style={{ minHeight: 150 }}
+                />
+              </div>
               <p className="text-xs text-muted-foreground">
-                This will appear at the bottom of the exported document
+                Supports rich formatting and images. This will appear at the bottom of the exported document.
               </p>
             </div>
 
@@ -1447,24 +1678,36 @@ export default function Editor() {
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>✓ Document title and metadata</p>
                 <p>✓ Table of contents ({Object.keys(sections).length} sections)</p>
-                <p>✓ All section content</p>
-                {exportHeader && <p>✓ Custom header included</p>}
-                {exportFooter && <p>✓ Custom footer included</p>}
+                <p>✓ All section content with formatting and tables</p>
+                {exportHeader && <p>✓ Custom header with rich content</p>}
+                {exportFooter && <p>✓ Custom footer with rich content</p>}
               </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setExportDialogOpen(false)}>
+            <Button 
+              variant="outline" 
+              size="default"
+              className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
+              onClick={() => setExportDialogOpen(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={performExport}>
-              <Download className="w-4 h-4 mr-2" />
+            <Button 
+              size="default"
+              className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
+              onClick={performExport}
+            >
+              <Download className="w-5 h-5 mr-2" />
               Export as {exportFormat.toUpperCase()}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AI Chat Assistant */}
+      {sowId && <AIChatAssistant sowId={sowId} />}
     </div>
   );
 }

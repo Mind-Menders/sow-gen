@@ -75,7 +75,7 @@ export default function EditSOW() {
         budget: sow.budget || "",
         currency: sow.currency || "USD",
         requirements: sow.requirements || "",
-        workflowId: sow.workflowId || "",
+        workflowId: sow.workflowId || "none",
       });
     }
   }, [sow]);
@@ -97,11 +97,12 @@ export default function EditSOW() {
         budget: formData.budget || undefined,
         currency: formData.currency || "USD",
         requirements: formData.requirements || undefined,
-        workflowId: formData.workflowId || undefined,
+        workflowId: formData.workflowId === "none" ? undefined : formData.workflowId || undefined,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
       toast({
         title: "SOW Updated",
         description: "Your Statement of Work details have been updated successfully.",
@@ -313,12 +314,12 @@ export default function EditSOW() {
 
               <div className="space-y-2">
                 <Label htmlFor="workflow">Approval Workflow</Label>
-                <Select value={formData.workflowId} onValueChange={(value) => setFormData({ ...formData, workflowId: value })}>
+                <Select value={formData.workflowId} onValueChange={(value) => setFormData({ ...formData, workflowId: value === "none" ? "" : value })}>
                   <SelectTrigger data-testid="select-workflow">
                     <SelectValue placeholder="Select approval workflow (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No workflow</SelectItem>
+                    <SelectItem value="none">No workflow</SelectItem>
                     {workflows.map((workflow) => (
                       <SelectItem key={workflow.id} value={workflow.id}>
                         {workflow.name}

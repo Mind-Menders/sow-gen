@@ -188,10 +188,21 @@ export class MemStorage implements IStorage {
       vendorName: "TechCorp Solutions",
       sponsor: "John Smith",
       sowType: "New Vendor (RFT)",
-      status: "pending_approval",
+      // map legacy pending_approval -> pending_review
+      status: "pending_review",
       createdAt: new Date("2025-10-25"),
       updatedAt: new Date("2025-10-25"),
       sections: JSON.stringify(sampleSections1),
+      initiative: "",
+      deliveryPortfolio: null,
+      businessOwner: null,
+      startDate: null,
+      endDate: null,
+      budget: null,
+      currency: "USD",
+      workflowId: null,
+      requirements: null,
+      createdBy: null,
     };
 
     const sow2: Sow = {
@@ -201,10 +212,21 @@ export class MemStorage implements IStorage {
       vendorName: "AppBuilders Inc",
       sponsor: "Emily Davis",
       sowType: "Existing Vendor Enhancement",
-      status: "approved",
+  // map approved -> ready_for_submission
+  status: "ready_for_submission",
       createdAt: new Date("2025-10-25"),
       updatedAt: new Date("2025-10-25"),
       sections: JSON.stringify(defaultSections),
+      initiative: "",
+      deliveryPortfolio: null,
+      businessOwner: null,
+      startDate: null,
+      endDate: null,
+      budget: null,
+      currency: "USD",
+      workflowId: null,
+      requirements: null,
+      createdBy: null,
     };
 
     const sow3: Sow = {
@@ -218,6 +240,16 @@ export class MemStorage implements IStorage {
       createdAt: new Date("2025-10-25"),
       updatedAt: new Date("2025-10-25"),
       sections: JSON.stringify(defaultSections),
+      initiative: "",
+      deliveryPortfolio: null,
+      businessOwner: null,
+      startDate: null,
+      endDate: null,
+      budget: null,
+      currency: "USD",
+      workflowId: null,
+      requirements: null,
+      createdBy: null,
     };
 
     const sow4: Sow = {
@@ -231,6 +263,16 @@ export class MemStorage implements IStorage {
       createdAt: new Date("2025-10-25"),
       updatedAt: new Date("2025-10-25"),
       sections: JSON.stringify(defaultSections),
+      initiative: "",
+      deliveryPortfolio: null,
+      businessOwner: null,
+      startDate: null,
+      endDate: null,
+      budget: null,
+      currency: "USD",
+      workflowId: null,
+      requirements: null,
+      createdBy: null,
     };
 
     const sow5: Sow = {
@@ -244,6 +286,16 @@ export class MemStorage implements IStorage {
       createdAt: new Date("2025-10-28"),
       updatedAt: new Date("2025-10-28"),
       sections: JSON.stringify(defaultSections),
+      initiative: "",
+      deliveryPortfolio: null,
+      businessOwner: null,
+      startDate: null,
+      endDate: null,
+      budget: null,
+      currency: "USD",
+      workflowId: null,
+      requirements: null,
+      createdBy: null,
     };
 
     const sow6: Sow = {
@@ -257,6 +309,16 @@ export class MemStorage implements IStorage {
       createdAt: new Date("2025-10-28"),
       updatedAt: new Date("2025-10-28"),
       sections: JSON.stringify(defaultSections),
+      initiative: "",
+      deliveryPortfolio: null,
+      businessOwner: null,
+      startDate: null,
+      endDate: null,
+      budget: null,
+      currency: "USD",
+      workflowId: null,
+      requirements: null,
+      createdBy: null,
     };
 
     this.sows.set(sow1.id, sow1);
@@ -282,11 +344,27 @@ export class MemStorage implements IStorage {
     const sowNumber = insertSow.sowNumber || generateSowNumber();
     const now = new Date();
     const sow: Sow = {
-      ...insertSow,
+      // Ensure all required Sow fields have defaults if not provided by insertSow
       id,
       sowNumber,
+      title: insertSow.title || "Untitled SOW",
+      initiative: insertSow.initiative || "",
+      deliveryPortfolio: insertSow.deliveryPortfolio ?? null,
+      vendorName: insertSow.vendorName || "",
+      sponsor: insertSow.sponsor ?? null,
+      businessOwner: insertSow.businessOwner ?? null,
+      startDate: insertSow.startDate ?? null,
+      endDate: insertSow.endDate ?? null,
+      budget: insertSow.budget ?? null,
+      currency: insertSow.currency || "USD",
+      sowType: insertSow.sowType || "New Vendor (RFT)",
+      status: insertSow.status || "draft",
+      workflowId: insertSow.workflowId ?? null,
+      requirements: insertSow.requirements ?? null,
+      createdBy: insertSow.createdBy ?? null,
       createdAt: now,
       updatedAt: now,
+      sections: insertSow.sections ?? JSON.stringify(defaultSections),
     };
     this.sows.set(id, sow);
     return sow;
@@ -322,8 +400,12 @@ export class MemStorage implements IStorage {
   async createTemplate(insertTemplate: InsertTemplate): Promise<Template> {
     const id = randomUUID();
     const template: Template = {
-      ...insertTemplate,
       id,
+      name: insertTemplate.name,
+      description: insertTemplate.description,
+      sowType: insertTemplate.sowType,
+      isOfficial: insertTemplate.isOfficial ?? "true",
+      sections: insertTemplate.sections ?? JSON.stringify(defaultSections),
       createdAt: new Date(),
     };
     this.templates.set(id, template);
@@ -353,12 +435,14 @@ export class MemStorage implements IStorage {
       id: randomUUID(),
       name: null,
       email: user.email || null,
+      password: null,
       firstName: user.firstName || null,
       lastName: user.lastName || null,
       profileImageUrl: user.profileImageUrl || null,
       role: "user",
       department: null,
       isActive: true,
+      forcePasswordChange: false,
       createdAt: now,
       updatedAt: now,
     };
@@ -368,7 +452,16 @@ export class MemStorage implements IStorage {
     const now = new Date();
     return {
       id: randomUUID(),
-      ...user,
+      name: user.name ?? null,
+      email: user.email ?? null,
+      password: (user as any).password ?? null,
+      firstName: user.firstName ?? null,
+      lastName: user.lastName ?? null,
+      profileImageUrl: user.profileImageUrl ?? null,
+      role: user.role ?? "user",
+      department: user.department ?? null,
+      isActive: user.isActive ?? true,
+      forcePasswordChange: user.forcePasswordChange ?? false,
       createdAt: now,
       updatedAt: now,
     };
@@ -395,7 +488,11 @@ export class MemStorage implements IStorage {
     const now = new Date();
     return {
       id: randomUUID(),
-      ...workflow,
+      name: workflow.name,
+      description: workflow.description,
+      sowTypes: workflow.sowTypes,
+      stages: workflow.stages,
+      isActive: workflow.isActive ?? true,
       createdAt: now,
       updatedAt: now,
     };
@@ -414,7 +511,13 @@ export class MemStorage implements IStorage {
     const now = new Date();
     return {
       id: randomUUID(),
-      ...approval,
+      sowId: approval.sowId,
+      workflowId: approval.workflowId ?? null,
+      currentStage: approval.currentStage ?? 0,
+      reviewerId: approval.reviewerId ?? null,
+      status: approval.status ?? "pending",
+      comments: approval.comments ?? null,
+      reviewedAt: approval.reviewedAt ?? null,
       createdAt: now,
     };
   }

@@ -19,22 +19,12 @@ import bgImage from "@assets/stock_images/abstract_blue_purple_8c94cc67.jpg";
 import { useAuth } from "@/hooks/useAuth";
 
 const statusConfig = {
-  draft: {
-    label: "Initiated",
-    variant: "secondary" as const,
-  },
-  in_review: {
-    label: "In Review",
-    variant: "default" as const,
-  },
-  ready_for_submission: {
-    label: "Ready for Submission",
-    variant: "default" as const,
-  },
-  rejected: {
-    label: "Rejected",
-    variant: "destructive" as const,
-  },
+  draft: { label: "Draft", variant: "secondary" as const },
+  initiated: { label: "Initiated", variant: "secondary" as const },
+  pending_review: { label: "Pending Review", variant: "default" as const },
+  in_review: { label: "In Review", variant: "default" as const },
+  ready_for_submission: { label: "Ready for Submission", variant: "default" as const },
+  rejected: { label: "Rejected", variant: "destructive" as const },
 };
 
 export default function Dashboard() {
@@ -69,6 +59,7 @@ export default function Dashboard() {
   const stats = {
     total: sows.length,
     draft: sows.filter((s) => s.status === "draft").length,
+    pending_review: sows.filter((s) => s.status === "pending_review").length,
     in_review: sows.filter((s) => s.status === "in_review").length,
     ready_for_submission: sows.filter((s) => s.status === "ready_for_submission").length,
   };
@@ -107,7 +98,6 @@ export default function Dashboard() {
               <p className="text-4xl font-bold text-foreground" data-testid="stat-total">{stats.total}</p>
             </CardContent>
           </Card>
-
           <Card className="border-card-border hover-elevate">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -123,12 +113,12 @@ export default function Dashboard() {
           <Card className="border-card-border hover-elevate">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-muted-foreground">In Review</p>
+                <p className="text-sm font-medium text-muted-foreground">Pending Review</p>
                 <Clock className="w-5 h-5 text-muted-foreground" />
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-4xl font-bold text-foreground" data-testid="stat-pending">{stats.in_review}</p>
+              <p className="text-4xl font-bold text-foreground" data-testid="stat-pending">{stats.pending_review}</p>
             </CardContent>
           </Card>
 

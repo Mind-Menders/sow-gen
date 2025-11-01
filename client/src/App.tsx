@@ -33,6 +33,8 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/createsow" component={CreateSOW} />
       <Route path="/editsow" component={EditSOW} />
+      {/* Alias route to support hyphenated path as well */}
+      <Route path="/edit-sow" component={EditSOW} />
       <Route path="/editor" component={Editor} />
       <Route path="/templates" component={Templates} />
       <Route path="/workflows" component={Workflows} />

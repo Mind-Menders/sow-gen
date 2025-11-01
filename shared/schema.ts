@@ -12,9 +12,11 @@ export const sowTypes = [
 
 export const sowStatuses = [
   "draft",
-  "pending_approval",
-  "approved",
-  "rejected"
+  "initiated",
+  "pending_review",
+  "in_review",
+  "ready_for_submission",
+  "rejected",
 ] as const;
 
 export const sessions = pgTable(

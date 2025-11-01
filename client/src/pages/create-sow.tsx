@@ -109,7 +109,8 @@ export default function CreateSOW() {
         budget: formData.budget || undefined,
         currency: formData.currency || "USD",
         requirements: formData.requirements || undefined,
-        status: formData.workflowId ? "pending_approval" : "draft",
+  // If a workflow is selected, set to pending_review so approvals can be created
+  status: formData.workflowId ? "pending_review" : "draft",
         workflowId: formData.workflowId || undefined,
         createdBy: user?.id || undefined,
         sections: sectionsData,

@@ -63,7 +63,7 @@ export default function Landing() {
           <div className="max-w-6xl w-full space-y-12">
             <div className="text-center space-y-4">
               <h2 className="text-5xl font-bold text-foreground">
-                Enterprise SOW Generator
+                Emirates AI SOW Processor
               </h2>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
                 Streamline your Statement of Work creation process with powerful templates,
