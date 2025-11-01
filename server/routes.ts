@@ -612,6 +612,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // SOW Approvals routes
+  // Get all approvals (for dashboard)
+  app.get("/api/approvals", async (req, res) => {
+    try {
+      const approvals = await dbStorage.getAllApprovals();
+      res.json(approvals);
+    } catch (error) {
+      console.error("Error getting all approvals:", error);
+      res.status(500).json({ error: "Failed to get approvals" });
+    }
+  });
+
   app.get("/api/sows/:id/approvals", async (req, res) => {
     try {
       let approvals = await dbStorage.getSowApprovalsBySowId(req.params.id);
@@ -667,13 +678,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!approval) {
         return res.status(404).json({ error: "Approval not found" });
       }
-      // Record an audit entry for this review action
+      // Record an audit entry for this review action (approval status change)
       try {
         const userId = req.session?.userId || 'system';
+        const previousApprovalStatus = status && status !== 'pending' ? 'pending' : undefined;
         await dbStorage.createSowAuditEntry({
           sowId: approval.sowId,
           action: 'reviewed',
           performedBy: userId,
+          previousStatus: previousApprovalStatus,
           newStatus: status,
           remarks: comments,
           metadata: JSON.stringify({ approvalId: approval.id }),
@@ -681,12 +694,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (auditErr) {
         console.warn('Failed to create audit entry for review action', auditErr);
       }
-      // When an approval is updated from pending -> approved, if the SOW is in pending_review,
+      // When an approval is updated to reviewed or approved, and the SOW is not yet in_review,
       // move it to in_review to reflect active review progress.
       try {
-        if (status === 'approved') {
+        if (status === 'reviewed' || status === 'approved') {
           const sow = await dbStorage.getSowById(approval.sowId);
-          if (sow && sow.status === 'pending_review') {
+          if (sow && (sow.status === 'draft' || sow.status === 'initiated' || sow.status === 'pending_review')) {
             const previousStatus = sow.status;
             await dbStorage.updateSow(sow.id, { status: 'in_review' });
             await dbStorage.createSowAuditEntry({

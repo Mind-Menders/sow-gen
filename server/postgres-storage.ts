@@ -167,6 +167,10 @@ export class PostgresStorage implements IStorage {
     return await db.select().from(sowApprovals).where(eq(sowApprovals.sowId, sowId));
   }
 
+  async getAllApprovals(): Promise<SowApproval[]> {
+    return await db.select().from(sowApprovals);
+  }
+
   async updateSowApproval(id: string, updates: Partial<SowApproval>): Promise<SowApproval | null> {
     const result = await db.update(sowApprovals)
       .set(updates)

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import ReactQuill, { Quill } from "react-quill";
-import { ArrowLeft, Save, Download, Sparkles, Check, CheckCircle2, Clock, XCircle, FileDown, Users2, Copy, Ban, CheckSquare, History, UserCog, RotateCcw } from "lucide-react";
+import { ArrowLeft, Save, Download, Sparkles, Check, CheckCircle2, Clock, XCircle, FileDown, Users2, Copy, Ban, CheckSquare, History, UserCog, RotateCcw, GripVertical, Pencil, Trash2 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -121,6 +122,15 @@ export default function Editor() {
   const [aiSuggestionsDialogOpen, setAiSuggestionsDialogOpen] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<Array<{ title: string; icon: string; description: string; selected: boolean }>>([]);
   const debouncedEditContent = useDebounce(editContent, 2000);
+  const [draggedSectionKey, setDraggedSectionKey] = useState<string | null>(null);
+  const [dragOverSectionKey, setDragOverSectionKey] = useState<string | null>(null);
+  const [editSectionDialogOpen, setEditSectionDialogOpen] = useState(false);
+  const [editingSectionKey, setEditingSectionKey] = useState<string | null>(null);
+  const [editingSectionTitle, setEditingSectionTitle] = useState("");
+  const [deleteSectionDialogOpen, setDeleteSectionDialogOpen] = useState(false);
+  const [deletingSectionKey, setDeletingSectionKey] = useState<string | null>(null);
+  const [duplicateConfirmDialogOpen, setDuplicateConfirmDialogOpen] = useState(false);
+  const [cancelConfirmDialogOpen, setCancelConfirmDialogOpen] = useState(false);
 
   const { data: sow, isLoading } = useQuery<Sow>({
     queryKey: sowId ? [`/api/sows/${sowId}`] : ["/api/sows"],
@@ -162,6 +172,19 @@ export default function Editor() {
       }
     }
   }, [sow]);
+
+  // Debug: Log approvals data when loaded
+  useEffect(() => {
+    if (approvals && approvals.length > 0) {
+      console.log('Approvals loaded:', approvals.map(a => ({
+        id: a.id,
+        reviewerId: a.reviewerId,
+        currentStage: a.currentStage,
+        status: a.status,
+        reviewedAt: a.reviewedAt
+      })));
+    }
+  }, [approvals]);
 
   useEffect(() => {
     if (selectedSection && sections[selectedSection]) {
@@ -592,6 +615,208 @@ export default function Editor() {
     }
   };
 
+  const handleDragStart = (e: React.DragEvent<HTMLButtonElement>, sectionKey: string) => {
+    setDraggedSectionKey(sectionKey);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLButtonElement>, sectionKey: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverSectionKey(sectionKey);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverSectionKey(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLButtonElement>, targetKey: string) => {
+    e.preventDefault();
+    setDragOverSectionKey(null);
+
+    if (!draggedSectionKey || draggedSectionKey === targetKey) {
+      setDraggedSectionKey(null);
+      return;
+    }
+
+    // Reorder sections
+    const sectionEntries = Object.entries(sections);
+    const draggedIndex = sectionEntries.findIndex(([key]) => key === draggedSectionKey);
+    const targetIndex = sectionEntries.findIndex(([key]) => key === targetKey);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedSectionKey(null);
+      return;
+    }
+
+    // Create new array with reordered sections
+    const reordered = [...sectionEntries];
+    const [removed] = reordered.splice(draggedIndex, 1);
+    reordered.splice(targetIndex, 0, removed);
+
+    // Convert back to object maintaining new order
+    const reorderedSections: SowSections = {};
+    reordered.forEach(([key, value]) => {
+      reorderedSections[key] = value;
+    });
+
+    setSections(reorderedSections);
+    setDraggedSectionKey(null);
+
+    // Save reordered sections to backend
+    if (sowId) {
+      try {
+        await apiRequest("PATCH", `/api/sows/${sowId}`, {
+          sections: JSON.stringify(reorderedSections),
+        });
+        queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+        toast({
+          title: "Sections Reordered",
+          description: "Section order has been saved successfully.",
+        });
+      } catch (error) {
+        toast({
+          title: "Save Failed",
+          description: "Could not save section order. Please try again.",
+          variant: "destructive",
+        });
+        // Revert on error
+        setSections(sections);
+      }
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedSectionKey(null);
+    setDragOverSectionKey(null);
+  };
+
+  const handleEditSectionClick = (e: React.MouseEvent, sectionKey: string) => {
+    e.stopPropagation(); // Prevent section selection
+    setEditingSectionKey(sectionKey);
+    setEditingSectionTitle(sections[sectionKey].title);
+    setEditSectionDialogOpen(true);
+  };
+
+  const handleDeleteSectionClick = (e: React.MouseEvent, sectionKey: string) => {
+    e.stopPropagation(); // Prevent section selection
+    setDeletingSectionKey(sectionKey);
+    setDeleteSectionDialogOpen(true);
+  };
+
+  const editSectionMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingSectionKey || !editingSectionTitle.trim()) {
+        throw new Error("Invalid section data");
+      }
+
+      const oldTitle = sections[editingSectionKey].title;
+      const updatedSections = {
+        ...sections,
+        [editingSectionKey]: {
+          ...sections[editingSectionKey],
+          title: editingSectionTitle.trim(),
+        },
+      };
+
+      // Update SOW with new section title
+      await apiRequest("PATCH", `/api/sows/${sowId}`, {
+        sections: JSON.stringify(updatedSections),
+      });
+
+      // Create audit trail entry
+      await apiRequest("POST", `/api/sows/${sowId}/audit`, {
+        action: "section_renamed",
+        remarks: `Renamed section from "${oldTitle}" to "${editingSectionTitle.trim()}"`,
+        metadata: JSON.stringify({
+          sectionKey: editingSectionKey,
+          oldTitle,
+          newTitle: editingSectionTitle.trim(),
+        }),
+      });
+
+      return updatedSections;
+    },
+    onSuccess: (updatedSections) => {
+      setSections(updatedSections);
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}/audit`] });
+      setEditSectionDialogOpen(false);
+      setEditingSectionKey(null);
+      setEditingSectionTitle("");
+      toast({
+        title: "Section Updated",
+        description: "Section title has been updated successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Update Failed",
+        description: "Could not update section title. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteSectionMutation = useMutation({
+    mutationFn: async () => {
+      if (!deletingSectionKey) {
+        throw new Error("No section selected");
+      }
+
+      const deletedSection = sections[deletingSectionKey];
+      const updatedSections = { ...sections };
+      delete updatedSections[deletingSectionKey];
+
+      // Update SOW with section removed
+      await apiRequest("PATCH", `/api/sows/${sowId}`, {
+        sections: JSON.stringify(updatedSections),
+      });
+
+      // Create audit trail entry
+      await apiRequest("POST", `/api/sows/${sowId}/audit`, {
+        action: "section_deleted",
+        remarks: `Deleted section "${deletedSection.title}"`,
+        metadata: JSON.stringify({
+          sectionKey: deletingSectionKey,
+          sectionTitle: deletedSection.title,
+          sectionIcon: deletedSection.icon,
+        }),
+      });
+
+      return { updatedSections, deletedKey: deletingSectionKey };
+    },
+    onSuccess: ({ updatedSections, deletedKey }) => {
+      setSections(updatedSections);
+      
+      // If the deleted section was selected, clear selection or select first available
+      if (selectedSection === deletedKey) {
+        const remainingSections = Object.keys(updatedSections);
+        setSelectedSection(remainingSections.length > 0 ? remainingSections[0] : null);
+        setEditContent(remainingSections.length > 0 ? updatedSections[remainingSections[0]].content : "");
+      }
+
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}/audit`] });
+      setDeleteSectionDialogOpen(false);
+      setDeletingSectionKey(null);
+      toast({
+        title: "Section Deleted",
+        description: "Section has been deleted successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Delete Failed",
+        description: "Could not delete section. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleExport = () => {
     setExportDialogOpen(true);
   };
@@ -664,6 +889,43 @@ export default function Editor() {
     );
   }
 
+  // Normalize status values coming from server/DB to the canonical keys used in statusConfig
+  const normalizeStatus = (value: string | null | undefined): keyof typeof statusConfig | undefined => {
+    if (!value) return undefined;
+    const raw = (value + "").toLowerCase().trim();
+    // common whitespace/hyphen variations -> underscore
+    const underscored = raw.replace(/[\s-]+/g, "_");
+    // legacy and friendly mappings
+    const map: Record<string, keyof typeof statusConfig> = {
+      pending_approval: "pending_review",
+      approved: "ready_for_submission",
+      in_review: "in_review",
+      inreview: "in_review",
+      pending_review: "pending_review",
+      pendingreview: "pending_review",
+      ready_for_submission: "ready_for_submission",
+      readyforsubmission: "ready_for_submission",
+      draft: "draft",
+      initiated: "initiated",
+      rejected: "rejected",
+    };
+    if (map[underscored]) return map[underscored];
+    // final check if statusConfig has the key after normalization
+    return (underscored in statusConfig) ? (underscored as keyof typeof statusConfig) : undefined;
+  };
+
+  const normalizedStatus = normalizeStatus(sow.status);
+
+  // Compute derived status for display
+  let displayStatus: keyof typeof statusConfig | undefined = normalizedStatus;
+  if (
+    normalizedStatus !== 'rejected' &&
+    normalizedStatus !== 'ready_for_submission' &&
+    approvals && approvals.some(a => a.status === 'reviewed' || a.status === 'approved')
+  ) {
+    displayStatus = 'in_review';
+  }
+
   const sectionsList = Object.entries(sections);
   const completedSections = sectionsList.filter(([, section]) => section.content.trim().length > 0).length;
   
@@ -706,13 +968,13 @@ export default function Editor() {
                   {/* Status Badge */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Status:</span>
-                    {statusConfig[sow.status as keyof typeof statusConfig] ? (
-                      <Badge variant={statusConfig[sow.status as keyof typeof statusConfig].variant} className="text-xs">
-                        {statusConfig[sow.status as keyof typeof statusConfig].label}
+                    {displayStatus ? (
+                      <Badge variant={statusConfig[displayStatus].variant} className="text-xs">
+                        {statusConfig[displayStatus].label}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="text-xs">
-                        Unknown Status
+                        {sow.status ? sow.status : 'Unknown Status'}
                       </Badge>
                     )}
                   </div>
@@ -761,20 +1023,20 @@ export default function Editor() {
                 <Button 
                   variant="outline" 
                   size="default"
-                  onClick={() => copySowMutation.mutate()}
+                  onClick={() => setDuplicateConfirmDialogOpen(true)}
                   disabled={copySowMutation.isPending}
                   data-testid="button-copy-sow"
                   className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
                 >
                   <Copy className="w-5 h-5 mr-2" />
-                  {copySowMutation.isPending ? "Copying..." : "Copy"}
+                  {copySowMutation.isPending ? "Duplicating now..." : "Duplicate"}
                 </Button>
                 
                 {sow.status !== "rejected" && (
                   <Button 
                     variant="outline" 
                     size="default"
-                    onClick={() => cancelSowMutation.mutate()}
+                    onClick={() => setCancelConfirmDialogOpen(true)}
                     disabled={cancelSowMutation.isPending}
                     data-testid="button-cancel-sow"
                     className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
@@ -857,30 +1119,63 @@ export default function Editor() {
                 {sectionsList.map(([key, section], index) => {
                   const isCompleted = section.content.trim().length > 0;
                   const isActive = selectedSection === key;
+                  const isDragging = draggedSectionKey === key;
+                  const isDropTarget = dragOverSectionKey === key;
+                  
                   return (
-                    <button
-                      key={key}
-                      onClick={() => handleSectionChange(key)}
-                      className={`w-full text-left p-3 rounded-md border transition-all hover-elevate ${
-                        isActive ? "border-primary bg-accent" : "border-card-border"
-                      }`}
-                      data-testid={`button-section-${key}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
-                          {section.icon}
+                    <div key={key} className="relative group">
+                      <button
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, key)}
+                        onDragOver={(e) => handleDragOver(e, key)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, key)}
+                        onDragEnd={handleDragEnd}
+                        onClick={() => handleSectionChange(key)}
+                        className={`w-full text-left p-3 rounded-md border transition-all hover-elevate ${
+                          isActive ? "border-primary bg-accent" : "border-card-border"
+                        } ${isDragging ? "opacity-50 cursor-grabbing" : "cursor-grab"} ${
+                          isDropTarget ? "border-primary border-2 bg-primary/5" : ""
+                        }`}
+                        data-testid={`button-section-${key}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
+                          <div className="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {section.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground mb-1">
+                              {index + 1}. {section.title}
+                            </p>
+                            {section.content && (
+                              <p className="text-xs text-muted-foreground line-clamp-2">{section.content.substring(0, 60)}...</p>
+                            )}
+                          </div>
+                          {isCompleted && <Check className="w-4 h-4 text-green-600 flex-shrink-0" />}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground mb-1">
-                            {index + 1}. {section.title}
-                          </p>
-                          {section.content && (
-                            <p className="text-xs text-muted-foreground line-clamp-2">{section.content.substring(0, 60)}...</p>
-                          )}
-                        </div>
-                        {isCompleted && <Check className="w-4 h-4 text-green-600 flex-shrink-0" />}
+                      </button>
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => handleEditSectionClick(e, key)}
+                          className="h-7 w-7 p-0 hover:bg-blue-100 hover:text-blue-600"
+                          title="Edit section title"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => handleDeleteSectionClick(e, key)}
+                          className="h-7 w-7 p-0 hover:bg-red-100 hover:text-red-600"
+                          title="Delete section"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
                 <div className="pt-4 border-t mt-4">
@@ -1088,25 +1383,42 @@ export default function Editor() {
                           const isCurrentStage = stageIdx === currentStageIdx;
                           const isPastStage = stageIdx < currentStageIdx;
 
+                          // Visual style based on stage state
+                          const stageState = isPastStage ? 'completed' : (isCurrentStage ? 'current' : 'upcoming');
+                          const containerClass = stageState === 'completed'
+                            ? 'border-emerald-200 bg-emerald-50'
+                            : stageState === 'current'
+                              ? 'border-amber-200 bg-amber-50'
+                              : 'border-card-border';
+                          const iconBubbleClass = stageState === 'completed'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : stageState === 'current'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-muted text-muted-foreground';
+                          const IconForStage = isPastStage ? CheckCircle2 : (isCurrentStage ? Clock : Users2);
+
                           return (
-                            <div key={stage.id || stageIdx} className="border rounded-lg p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <Badge variant={isPastStage ? "default" : isCurrentStage ? "secondary" : "outline"} className="text-xs">
-                                    Stage {stageIdx + 1}
-                                  </Badge>
-                                  <span className="text-sm font-medium">{stage.name}</span>
+                            <div key={stage.id || stageIdx} className={`border rounded-xl p-4 md:p-5 ${containerClass}`}>
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-9 h-9 rounded-md flex items-center justify-center ${iconBubbleClass}`}>
+                                    <IconForStage className="w-5 h-5" />
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={isPastStage ? "default" : isCurrentStage ? "secondary" : "outline"} className="text-sm px-2 py-0.5">
+                                      Stage {stageIdx + 1}
+                                    </Badge>
+                                    <span className="text-base font-semibold">{stage.name}</span>
+                                  </div>
                                 </div>
-                                {isPastStage && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                                {isCurrentStage && <Clock className="w-4 h-4 text-yellow-600" />}
                               </div>
 
-                              <div className="space-y-2 mt-2">
+                              <div className="space-y-3 mt-3">
                                 {stageReviewers.map((reviewer: any) => {
                                   // Debug: log user, reviewer, and button logic
                                   if (user && reviewer) {
                                     const reviewerApproval = approvals?.find(
-                                      (approval) => approval.reviewerId === reviewer.id && approval.currentStage === stage.stage
+                                      (approval) => approval.reviewerId === reviewer.id && approval.currentStage === stageIdx
                                     );
                                     const hasReviewed = !!(reviewerApproval && reviewerApproval.reviewedAt);
                                     const isCurrentUser = user && (
@@ -1128,7 +1440,7 @@ export default function Editor() {
                                   if (!reviewer) return null;
                                   // Check all approvals to see if this reviewer has reviewed
                                   const reviewerApproval = approvals?.find(
-                                    (approval) => approval.reviewerId === reviewer.id && approval.currentStage === stage.stage
+                                    (approval) => approval.reviewerId === reviewer.id && approval.currentStage === stageIdx
                                   );
                                   const hasReviewed = !!(reviewerApproval && reviewerApproval.reviewedAt);
 
@@ -1143,24 +1455,40 @@ export default function Editor() {
                                   );
 
                                   return (
-                                    <div key={reviewer.id} className="flex items-center justify-between text-xs">
-                                      <div className="flex items-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${hasReviewed ? 'bg-green-600' : 'bg-gray-300'}`} />
-                                        <span>{reviewer.firstName} {reviewer.lastName}</span>
+                                    <div key={reviewer.id} className="flex items-center justify-between text-sm md:text-base">
+                                      <div className="flex items-center gap-3">
+                                        <div className={`w-2.5 h-2.5 rounded-full ${hasReviewed ? 'bg-green-600' : 'bg-gray-300'}`} />
+                                        <span className="font-medium">{reviewer.firstName} {reviewer.lastName}</span>
                                       </div>
                                       {isCurrentStage && !hasReviewed && isCurrentUser && (
                                         <Button
-                                          size="sm"
+                                          size="default"
                                           variant="destructive"
-                                          className="h-6 text-xs flex items-center gap-1"
+                                          className="h-9 text-sm px-4 flex items-center gap-2"
                                           onClick={() => {
                                             // Find the approval record for this reviewer and stage
-                                            const approval = approvals?.find(
+                                            // First try to match by reviewerId, then fall back to just stage
+                                            let approval = approvals?.find(
                                               (a) => a.reviewerId === reviewer.id && a.currentStage === stageIdx
                                             );
-                                            console.log('Mark Reviewed clicked', {
+                                            
+                                            // If not found by exact reviewerId match, try to find by stage only
+                                            // This handles cases where the approval was created with a different user ID
+                                            if (!approval) {
+                                              const stageApprovals = approvals?.filter(a => a.currentStage === stageIdx && !a.reviewedAt);
+                                              if (stageApprovals && stageApprovals.length > 0) {
+                                                approval = stageApprovals[0]; // Use the first pending approval for this stage
+                                                console.log('Using fallback approval for stage', stageIdx, ':', approval);
+                                              }
+                                            }
+                                            
+                                            console.log('Mark Reviewed clicked - Debug Info:', {
                                               approvalId: approval?.id,
-                                              reviewerId: reviewer.id
+                                              reviewerId: reviewer.id,
+                                              currentStage: stageIdx,
+                                              allApprovals: approvals,
+                                              matchingApprovals: approvals?.filter(a => a.currentStage === stageIdx),
+                                              reviewerIdsInStage: approvals?.filter(a => a.currentStage === stageIdx).map(a => a.reviewerId),
                                             });
                                             if (approval?.id && reviewer.id) {
                                               markAsReviewedMutation.mutate({
@@ -1168,17 +1496,26 @@ export default function Editor() {
                                                 reviewerId: reviewer.id,
                                               });
                                             } else {
-                                              alert('Approval record not found for this reviewer/stage.');
+                                              console.error('Approval record not found!', {
+                                                searchedFor: { reviewerId: reviewer.id, currentStage: stageIdx },
+                                                availableApprovals: approvals?.map(a => ({ 
+                                                  id: a.id, 
+                                                  reviewerId: a.reviewerId, 
+                                                  currentStage: a.currentStage,
+                                                  status: a.status 
+                                                }))
+                                              });
+                                              alert(`Approval record not found for this reviewer/stage.\n\nSearching for: Reviewer ${reviewer.id}, Stage ${stageIdx}\nPlease check the console for details.`);
                                             }
                                           }}
                                           disabled={markAsReviewedMutation.isPending}
                                         >
-                                          <CheckSquare className="w-4 h-4 mr-1" />
+                                          <CheckSquare className="w-5 h-5 mr-1" />
                                           {markAsReviewedMutation.isPending ? "..." : "Mark Reviewed"}
                                         </Button>
                                       )}
                                       {hasReviewed && (
-                                        <span className="text-muted-foreground">Reviewed</span>
+                                        <span className="text-muted-foreground font-medium">Reviewed</span>
                                       )}
                                     </div>
                                   );
@@ -1214,6 +1551,32 @@ export default function Editor() {
                 </p>
               </CardHeader>
               <CardContent>
+                {/* Administrative Actions moved to top */}
+                <div className="mb-6 pb-6 border-b space-y-3">
+                  <h3 className="font-medium text-sm">Administrative Actions</h3>
+                  <div className="flex gap-3 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="default"
+                      onClick={() => setRevertDialogOpen(true)}
+                      disabled={!sow || normalizedStatus === 'draft'}
+                      className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
+                    >
+                      <RotateCcw className="w-5 h-5 mr-2" />
+                      Revert to Previous Stage
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="default"
+                      onClick={() => setReassignDialogOpen(true)}
+                      disabled={!workflow}
+                      className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
+                    >
+                      <UserCog className="w-5 h-5 mr-2" />
+                      Reassign Reviewer
+                    </Button>
+                  </div>
+                </div>
                 {auditTrail && auditTrail.length > 0 ? (
                   <div className="space-y-4">
                     {auditTrail.map((entry) => (
@@ -1225,6 +1588,9 @@ export default function Editor() {
                               {entry.action === 'reviewer_change' && 'Reviewer Reassigned'}
                               {entry.action === 'stage_revert' && 'Stage Reverted'}
                               {entry.action === 'created' && 'SOW Created'}
+                              {entry.action === 'reviewed' && 'Approval Updated'}
+                              {entry.action === 'section_renamed' && 'Section Title Updated'}
+                              {entry.action === 'section_deleted' && 'Section Deleted'}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {entry.createdAt && format(new Date(entry.createdAt), 'PPpp')}
@@ -1270,32 +1636,7 @@ export default function Editor() {
                   </p>
                 )}
 
-                {/* Action Buttons */}
-                <div className="mt-6 pt-6 border-t space-y-3">
-                  <h3 className="font-medium text-sm mb-3">Administrative Actions</h3>
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      size="default"
-                      onClick={() => setRevertDialogOpen(true)}
-                      disabled={!sow || sow.status === 'draft'}
-                      className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
-                    >
-                      <RotateCcw className="w-5 h-5 mr-2" />
-                      Revert to Previous Stage
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="default"
-                      onClick={() => setReassignDialogOpen(true)}
-                      disabled={!workflow}
-                      className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
-                    >
-                      <UserCog className="w-5 h-5 mr-2" />
-                      Reassign Reviewer
-                    </Button>
-                  </div>
-                </div>
+                {/* Administrative Actions are placed above */}
               </CardContent>
             </Card>
             </div>
@@ -1635,7 +1976,7 @@ export default function Editor() {
             </div>
 
             {/* Header */}
-            <div className="space-y-2">
+                                  <div className="space-y-2">
               <Label htmlFor="export-header">Document Header (Optional)</Label>
               <div className="bg-white rounded border">
                 <ReactQuill
@@ -1705,6 +2046,138 @@ export default function Editor() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Section Title Dialog */}
+      <Dialog open={editSectionDialogOpen} onOpenChange={setEditSectionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Section Title</DialogTitle>
+            <DialogDescription>
+              Update the title for this section.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-section-title">Section Title</Label>
+              <Input
+                id="edit-section-title"
+                value={editingSectionTitle}
+                onChange={(e) => setEditingSectionTitle(e.target.value)}
+                placeholder="Enter section title"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && editingSectionTitle.trim()) {
+                    editSectionMutation.mutate();
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditSectionDialogOpen(false);
+                setEditingSectionKey(null);
+                setEditingSectionTitle("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => editSectionMutation.mutate()}
+              disabled={!editingSectionTitle.trim() || editSectionMutation.isPending}
+            >
+              {editSectionMutation.isPending ? "Updating..." : "Update"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Section Confirmation Dialog */}
+      <AlertDialog open={deleteSectionDialogOpen} onOpenChange={setDeleteSectionDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Section</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the section "{deletingSectionKey && sections[deletingSectionKey] ? sections[deletingSectionKey].title : ''}"? 
+              This action cannot be undone and all content in this section will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setDeleteSectionDialogOpen(false);
+                setDeletingSectionKey(null);
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteSectionMutation.mutate()}
+              disabled={deleteSectionMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {deleteSectionMutation.isPending ? "Deleting..." : "Delete Section"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Duplicate SOW Confirmation Dialog */}
+      <AlertDialog open={duplicateConfirmDialogOpen} onOpenChange={setDuplicateConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Duplicate SOW</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to create a duplicate of this Statement of Work? 
+              A new SOW will be created with all the same content, sections, and workflow settings.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDuplicateConfirmDialogOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                copySowMutation.mutate();
+                setDuplicateConfirmDialogOpen(false);
+              }}
+              disabled={copySowMutation.isPending}
+            >
+              {copySowMutation.isPending ? "Duplicating..." : "Duplicate SOW"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel SOW Confirmation Dialog */}
+      <AlertDialog open={cancelConfirmDialogOpen} onOpenChange={setCancelConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel SOW</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this Statement of Work? 
+              This will mark the SOW as rejected and it cannot be submitted for approval.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCancelConfirmDialogOpen(false)}>
+              No, Keep SOW
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                cancelSowMutation.mutate();
+                setCancelConfirmDialogOpen(false);
+              }}
+              disabled={cancelSowMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {cancelSowMutation.isPending ? "Cancelling..." : "Yes, Cancel SOW"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* AI Chat Assistant */}
       {sowId && <AIChatAssistant sowId={sowId} />}

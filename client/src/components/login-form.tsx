@@ -57,11 +57,6 @@ export function LoginForm({ onClose }: LoginFormProps) {
       <Button type="submit" className="w-full">
         Sign In
       </Button>
-      <div className="text-sm text-center text-muted-foreground">
-        Default admin credentials:<br />
-        Email: admin@example.com<br />
-        Password: admin123
-      </div>
     </form>
   );
 }

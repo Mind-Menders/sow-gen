@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { FileText, FileCheck, Clock, CheckCircle2, Plus, Filter, Search, User, Edit, ArrowRight } from "lucide-react";
@@ -13,19 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Sow, User as UserType } from "@shared/schema";
+import type { Sow, User as UserType, SowApproval } from "@shared/schema";
 import { format } from "date-fns";
 import bgImage from "@assets/stock_images/abstract_blue_purple_8c94cc67.jpg";
 import { useAuth } from "@/hooks/useAuth";
-
-const statusConfig = {
-  draft: { label: "Draft", variant: "secondary" as const },
-  initiated: { label: "Initiated", variant: "secondary" as const },
-  pending_review: { label: "Pending Review", variant: "default" as const },
-  in_review: { label: "In Review", variant: "default" as const },
-  ready_for_submission: { label: "Ready for Submission", variant: "default" as const },
-  rejected: { label: "Rejected", variant: "destructive" as const },
-};
+import { defaultStatusConfig, normalizeStatus, type StatusConfig } from "@shared/status-config";
 
 export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -41,8 +33,39 @@ export default function Dashboard() {
     queryKey: ["/api/users"],
   });
 
-  const filteredSows = sows.filter((sow) => {
-    if (statusFilter !== "all" && sow.status !== statusFilter) return false;
+  // Fetch all approvals for all SOWs (needed to compute derived status)
+  const { data: allApprovals = [] } = useQuery<SowApproval[]>({
+    queryKey: ["/api/approvals"],
+    enabled: sows.length > 0,
+  });
+
+  // Compute derived status for each SOW
+  const sowsWithDerivedStatus = useMemo(() => {
+    return sows.map((sow) => {
+      const sowApprovals = allApprovals.filter((a) => a.sowId === sow.id);
+      const normalizedStatus = normalizeStatus(sow.status);
+      
+      let displayStatus: keyof StatusConfig | undefined = normalizedStatus;
+      
+      // If not rejected/completed and at least one approval is reviewed, show "In Review"
+      if (
+        normalizedStatus !== 'rejected' &&
+        normalizedStatus !== 'ready_for_submission' &&
+        sowApprovals.some((a) => a.status === 'reviewed' || a.status === 'approved')
+      ) {
+        displayStatus = 'in_review';
+      }
+
+      return {
+        ...sow,
+        displayStatus,
+        normalizedStatus,
+      };
+    });
+  }, [sows, allApprovals]);
+
+  const filteredSows = sowsWithDerivedStatus.filter((sow) => {
+    if (statusFilter !== "all" && sow.displayStatus !== statusFilter) return false;
     if (typeFilter !== "all" && sow.sowType !== typeFilter) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -58,10 +81,10 @@ export default function Dashboard() {
 
   const stats = {
     total: sows.length,
-    draft: sows.filter((s) => s.status === "draft").length,
-    pending_review: sows.filter((s) => s.status === "pending_review").length,
-    in_review: sows.filter((s) => s.status === "in_review").length,
-    ready_for_submission: sows.filter((s) => s.status === "ready_for_submission").length,
+    draft: sowsWithDerivedStatus.filter((s) => s.displayStatus === "draft").length,
+    pending_review: sowsWithDerivedStatus.filter((s) => s.displayStatus === "pending_review").length,
+    in_review: sowsWithDerivedStatus.filter((s) => s.displayStatus === "in_review").length,
+    ready_for_submission: sowsWithDerivedStatus.filter((s) => s.displayStatus === "ready_for_submission").length,
   };
 
   const canEditSow = (sow: Sow) => {
@@ -155,7 +178,7 @@ export default function Dashboard() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                {Object.entries(statusConfig).map(([key, value]) => (
+                {Object.entries(defaultStatusConfig).map(([key, value]) => (
                   <SelectItem key={key} value={key}>{value.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -217,6 +240,8 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredSows.map((sow) => {
               const initiator = users.find((u) => u.id === sow.createdBy);
+              const displayStatus = sow.displayStatus;
+              
               return (
               <Link key={sow.id} href={`/editor?id=${sow.id}`}>
                 <Card 
@@ -224,15 +249,15 @@ export default function Dashboard() {
                   data-testid={`card-sow-${sow.id}`}
                 >
                   <CardHeader className="space-y-3 pr-16">
-                    {statusConfig[sow.status as keyof typeof statusConfig] ? (
+                    {displayStatus && defaultStatusConfig[displayStatus] ? (
                       <Badge
-                        variant={statusConfig[sow.status as keyof typeof statusConfig].variant}
+                        variant={defaultStatusConfig[displayStatus].variant}
                         className={
                           `w-fit uppercase text-xs font-semibold` +
-                          (sow.status === "ready_for_submission" ? " bg-green-600 text-white" : "")
+                          (displayStatus === "ready_for_submission" ? " bg-green-600 text-white" : "")
                         }
                       >
-                        {statusConfig[sow.status as keyof typeof statusConfig].label}
+                        {defaultStatusConfig[displayStatus].label}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="w-fit uppercase text-xs font-semibold">

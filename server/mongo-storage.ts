@@ -722,6 +722,22 @@ export class MongoStorage implements IStorage {
     return await this.getSowApprovalsBySowId(sowId);
   }
 
+  async getAllApprovals(): Promise<SowApproval[]> {
+    await this.ensureConnected();
+    const mongoApprovals = await this.approvalsCollection!.find({}).sort({ createdAt: -1 }).toArray();
+    return mongoApprovals.map((a: any) => ({
+      id: a._id.toHexString(),
+      sowId: a.sowId,
+      workflowId: a.workflowId,
+      currentStage: a.currentStage,
+      reviewerId: a.reviewerId,
+      status: a.status,
+      comments: a.comments,
+      reviewedAt: a.reviewedAt,
+      createdAt: a.createdAt,
+    }));
+  }
+
   // Audit Trail methods
   async createSowAuditEntry(entry: InsertSowAuditTrail): Promise<SowAuditTrail> {
     await this.ensureConnected();
