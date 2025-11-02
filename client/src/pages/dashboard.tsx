@@ -141,7 +141,7 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-4xl font-bold text-foreground" data-testid="stat-pending">{stats.pending_review}</p>
+              <p className="text-4xl font-bold text-foreground" data-testid="stat-pending">{stats.in_review}</p>
             </CardContent>
           </Card>
 

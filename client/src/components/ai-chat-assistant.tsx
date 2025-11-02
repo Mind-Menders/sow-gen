@@ -143,13 +143,17 @@ export function AIChatAssistant({ sowId }: AIChatAssistantProps) {
                     className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
                       msg.role === "user"
                         ? "bg-purple-600 text-white"
-                        : "bg-gray-100 text-gray-900"
+                        : "bg-gray-100 text-gray-900 prose prose-sm"
                     }`}
                   >
                     {msg.role === "assistant" && (
                       <Sparkles className="w-3 h-3 inline mr-1 text-purple-600" />
                     )}
-                    {msg.content}
+                    {msg.role === "user" ? (
+                      msg.content
+                    ) : (
+                      <div dangerouslySetInnerHTML={{ __html: msg.content }} />
+                    )}
                   </div>
                 </div>
               ))}

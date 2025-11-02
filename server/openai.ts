@@ -1,10 +1,10 @@
-import OpenAI from "openai";
+import OpenAI, { AzureOpenAI } from "openai";
 import { Ollama } from "ollama";
 
 // AI provider toggle. Set via env var `AI_PROVIDER`.
 // Supported values:
 // - "integrations" (default) — uses the existing Replit/OpenAI integrations client
-// - "azure" — calls Azure OpenAI REST endpoint (configure AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, AZURE_OPENAI_DEPLOYMENT)
+// - "azure" — uses AzureOpenAI SDK client (configure AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, AZURE_OPENAI_DEPLOYMENT, optional AZURE_OPENAI_API_VERSION)
 // - "olama" — calls an offline Olama inference endpoint (configure OLAMA_BASE_URL and OLAMA_MODEL)
 const AI_PROVIDER = (process.env.AI_PROVIDER || "integrations").toLowerCase();
 
@@ -14,9 +14,22 @@ export const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
 });
 
-/**
- * Helper: build the common SOW prompt
- */
+// Lazily initialize Azure client (when used)
+let cachedAzureClient: AzureOpenAI | null = null;
+function getAzureClient(): AzureOpenAI {
+  if (cachedAzureClient) return cachedAzureClient;
+  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+  const apiKey = process.env.AZURE_OPENAI_KEY;
+  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+  const apiVersion = process.env.AZURE_OPENAI_API_VERSION || "2024-04-01-preview";
+  if (!endpoint || !apiKey || !deployment) {
+    throw new Error("AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, and AZURE_OPENAI_DEPLOYMENT must be set when AI_PROVIDER=azure");
+  }
+  cachedAzureClient = new AzureOpenAI({ endpoint, apiKey, deployment, apiVersion });
+  return cachedAzureClient;
+}
+
+
 function buildPrompt(
   sectionTitle: string, 
   sectionContent: string, 
@@ -38,21 +51,29 @@ ${sowContext.requirements ? `- Requirements: ${sowContext.requirements}` : ''}
 Current Section: ${sectionTitle}
 Current Content: ${sectionContent || "(empty)"}
 
-Please generate professional, detailed content for this section of the SOW. The content should be:
+Generate professional, detailed content strictly only for this ${sectionTitle} section of the SOW. The content should be:
 1. Specific and actionable
 2. Professional and formal in tone
 3. Comprehensive and well-structured
 4. Aligned with enterprise SOW best practices
 ${sowContext.requirements ? '5. Address the specified requirements above' : ''}
 
-Generate the content in plain text format (no markdown), ready to be inserted into the document.`;
+Output format requirements:
+- Respond with CLEAN HTML only (no markdown, no code fences, no explanations)
+- Do NOT include <html>, <head>, or <body> tags; return an HTML fragment
+- Start with a top-level heading for the section title using <h2>${sectionTitle}</h2>
+- Use <h3> and <h4> for subheadings
+- Use semantic elements (p, ul/ol, table, thead, tbody, tr, th, td)
+- Keep links absolute text only (no external JS or inline scripts/styles)
+
+Return ONLY the HTML fragment.`;
 }
 
 /**
  * Generate content suggestion using the configured AI provider.
  * Environment configuration:
  * - For integrations (default): AI_INTEGRATIONS_OPENAI_BASE_URL, AI_INTEGRATIONS_OPENAI_API_KEY
- * - For azure: AZURE_OPENAI_ENDPOINT (eg https://your-resource.openai.azure.com), AZURE_OPENAI_KEY, AZURE_OPENAI_DEPLOYMENT
+ * - For azure (SDK): AZURE_OPENAI_ENDPOINT (eg https://your-resource.openai.azure.com), AZURE_OPENAI_KEY, AZURE_OPENAI_DEPLOYMENT, optional AZURE_OPENAI_API_VERSION
  * - For olama: OLAMA_BASE_URL (eg http://localhost:11434), OLAMA_MODEL (model name)
  */
 export async function generateContentSuggestion(
@@ -84,7 +105,11 @@ export async function generateContentSuggestion(
         stream: false,
       });
       
-      const text = response.response || "";
+      let text = response.response || "";
+      // Remove any accidental markdown code fences
+      if (text.startsWith('```')) {
+        text = text.replace(/^```(?:html|markdown)?\s*/i, '').replace(/```\s*$/i, '').trim();
+      }
       console.log("[AI:olama] response length:", text.length, "characters");
       return text;
     } catch (err: any) {
@@ -117,59 +142,80 @@ export async function generateContentSuggestion(
   }
 
   if (AI_PROVIDER === "azure") {
-    // Azure OpenAI REST API
-    const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-    const key = process.env.AZURE_OPENAI_KEY;
-    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
-    if (!endpoint || !key || !deployment) throw new Error("AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY and AZURE_OPENAI_DEPLOYMENT must be set when AI_PROVIDER=azure");
-
+    // Azure OpenAI via official SDK
     try {
-      const url = `${endpoint.replace(/\/$/, "")}/openai/deployments/${deployment}/chat/completions?api-version=2024-11-01-preview`;
-      const body = {
+      const client = getAzureClient();
+      const model = process.env.AZURE_OPENAI_DEPLOYMENT!; // deployment name
+      const response = await client.chat.completions.create({
+        model,
         messages: [
           { role: "system", content: "You are an expert SOW writer who creates professional, detailed content for enterprise Statement of Work documents." },
           { role: "user", content: prompt }
         ],
         max_tokens: 1024,
-      };
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "api-key": key },
-        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      const content = data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || "";
-      console.log("[AI:azure] response length:", (content || "").length);
+  let content = response?.choices?.[0]?.message?.content || "";
+      if (content.startsWith('```')) {
+        content = content.replace(/^```(?:html|markdown)?\s*/i, '').replace(/```\s*$/i, '').trim();
+      }
+      console.log("[AI:azure-sdk] response length:", (content || "").length);
       return content || "";
     } catch (err) {
-      console.error("[AI:azure] Error:", err);
+      console.error("[AI:azure-sdk] Error:", err);
       throw err;
     }
   }
 
-  // Default: use the existing OpenAI / Replit Integrations client
+  // Default: OpenAI integrations
   try {
     const response = await openai.chat.completions.create({
       model: process.env.AI_INTEGRATIONS_MODEL || "gpt-4o",
       messages: [
-        {
-          role: "system",
-          content: "You are an expert SOW writer who creates professional, detailed content for enterprise Statement of Work documents."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
+        { role: "system", content: "You are an expert SOW writer who creates professional, detailed content for enterprise Statement of Work documents." },
+        { role: "user", content: prompt }
       ],
       max_completion_tokens: 1024,
     });
-
-    const content = response.choices?.[0]?.message?.content || "";
-    console.log("[AI:integrations] Response length:", content.length, "characters");
+    
+    let content = response.choices?.[0]?.message?.content || "";
+    if (content.startsWith('```')) {
+      content = content.replace(/^```(?:html|markdown)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    }
+    console.log("[AI:integrations] response length:", content.length, "characters");
+    // If the model still returned markdown (no HTML tags), perform a minimal conversion for headings and paragraphs
+    if (!/[<>]/.test(content)) {
+      const lines = content.split(/\r?\n/);
+      const htmlLines: string[] = [];
+      let inUL = false;
+      let inOL = false;
+      const closeLists = () => {
+        if (inUL) { htmlLines.push('</ul>'); inUL = false; }
+        if (inOL) { htmlLines.push('</ol>'); inOL = false; }
+      };
+      for (const line of lines) {
+        if (/^###\s+/.test(line)) { closeLists(); htmlLines.push(`<h4>${line.replace(/^###\s+/, '')}</h4>`); continue; }
+        if (/^##\s+/.test(line)) { closeLists(); htmlLines.push(`<h3>${line.replace(/^##\s+/, '')}</h3>`); continue; }
+        if (/^#\s+/.test(line)) { closeLists(); htmlLines.push(`<h2>${line.replace(/^#\s+/, '')}</h2>`); continue; }
+        if (/^\s*[-*]\s+/.test(line)) {
+          if (!inUL) { closeLists(); htmlLines.push('<ul>'); inUL = true; }
+          htmlLines.push(`<li>${line.replace(/^\s*[-*]\s+/, '')}</li>`);
+          continue;
+        }
+        if (/^\s*\d+\.\s+/.test(line)) {
+          if (!inOL) { closeLists(); htmlLines.push('<ol>'); inOL = true; }
+          htmlLines.push(`<li>${line.replace(/^\s*\d+\.\s+/, '')}</li>`);
+          continue;
+        }
+        if (line.trim() === '') { closeLists(); continue; }
+        htmlLines.push(`<p>${line}</p>`);
+      }
+      closeLists();
+      content = `<h2>${sectionTitle}</h2>\n` + htmlLines.join('\n');
+    }
     return content;
-  } catch (error) {
-    console.error("[AI] Error calling OpenAI integrations:", error);
-    throw error;
+  } catch (err) {
+    console.error("[AI:integrations] Error:", err);
+    throw err;
   }
 }
 
@@ -217,26 +263,17 @@ async function aiComplete(systemPrompt: string, userPrompt: string, options: { m
   }
 
   if (AI_PROVIDER === "azure") {
-    const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-    const key = process.env.AZURE_OPENAI_KEY;
-    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
-    if (!endpoint || !key || !deployment) throw new Error("Azure OpenAI not configured");
-
-    const url = `${endpoint.replace(/\/$/, "")}/openai/deployments/${deployment}/chat/completions?api-version=2024-11-01-preview`;
-    const body = {
+    const client = getAzureClient();
+    const model = process.env.AZURE_OPENAI_DEPLOYMENT!;
+    const response = await client.chat.completions.create({
+      model,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
       ],
       max_tokens: maxTokens,
-    };
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "api-key": key },
-      body: JSON.stringify(body),
     });
-    const data = await res.json();
-    return data?.choices?.[0]?.message?.content || "";
+  return response?.choices?.[0]?.message?.content || "";
   }
 
   // Default: OpenAI integrations
@@ -262,7 +299,7 @@ export async function analyzeSectionQuality(
 ): Promise<{
   score: number;
   clarity: number;
-  completeness: number;
+  relevance: number;
   professionalism: number;
   issues: string[];
   suggestions: string[];
@@ -275,9 +312,9 @@ Vendor: ${sowContext.vendorName}
 Section: ${sectionTitle}
 Content: ${sectionContent || "(empty)"}
 
-You MUST respond with ONLY a valid JSON object. Do not include any markdown formatting, code blocks, or explanatory text.
+You MUST respond with ONLY a valid JSON object. Do not include any markdown formatting, code blocks, or explanatory text. Make sure scoring is purely based on the content provided above, make the scoring 0 if no content present.
 Use this exact format:
-{"score": 85, "clarity": 90, "completeness": 80, "professionalism": 85, "issues": ["issue1"], "suggestions": ["suggestion1"], "missingInfo": ["missing1"]}
+{"score": 85, "clarity": 90, "relevance": 80, "professionalism": 85, "issues": ["issue1"], "suggestions": ["suggestion1"], "missingInfo": ["missing1"]}
 
 Your response:`;
 
@@ -311,7 +348,7 @@ Your response:`;
     return {
       score: typeof parsed.score === 'number' ? parsed.score : 0,
       clarity: typeof parsed.clarity === 'number' ? parsed.clarity : 0,
-      completeness: typeof parsed.completeness === 'number' ? parsed.completeness : 0,
+      relevance: typeof parsed.relevance === 'number' ? parsed.relevance : 0,
       professionalism: typeof parsed.professionalism === 'number' ? parsed.professionalism : 0,
       issues: Array.isArray(parsed.issues) ? parsed.issues : [],
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
@@ -323,7 +360,7 @@ Your response:`;
     return {
       score: 0,
       clarity: 0,
-      completeness: 0,
+      relevance: 0,
       professionalism: 0,
       issues: ["Analysis temporarily unavailable. Please try again."],
       suggestions: [],

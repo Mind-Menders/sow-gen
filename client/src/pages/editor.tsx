@@ -1191,7 +1191,7 @@ export default function Editor() {
           <div className="lg:col-span-2 space-y-6">
             {selectedSection && sections[selectedSection] && (
               <>
-                {/* AI Analysis Panel moved to top */}
+                {/* AI Analysis Panel */}
                 <AIContainer>
                   <AIAnalysisPanel
                     sowId={sowId!}
@@ -1259,8 +1259,11 @@ export default function Editor() {
                 
                 {aiSuggestion ? (
                   <div className="space-y-3">
-                    <div className="p-4 rounded-md border border-card-border bg-card">
-                      <p className="text-sm whitespace-pre-wrap">{aiSuggestion}</p>
+                    <div className="p-4 rounded-md border border-card-border bg-card prose prose-sm max-w-none">
+                      <div 
+                        dangerouslySetInnerHTML={{ __html: aiSuggestion }}
+                        className="text-sm"
+                      />
                     </div>
                     <div className="flex gap-2">
                       <Button 

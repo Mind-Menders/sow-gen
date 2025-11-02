@@ -17,11 +17,12 @@ interface AIAnalysisPanelProps {
 
 export function AIAnalysisPanel({ sowId, sectionTitle, sectionContent }: AIAnalysisPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const MIN_CONTENT_LENGTH = 100; // Minimum 100 characters to trigger AI analysis
 
   const { data: analysis, isLoading, refetch } = useQuery({
     queryKey: [`/api/ai/analyze-section`, sowId, sectionTitle, sectionContent],
     queryFn: async () => {
-      if (!sectionContent || sectionContent.length < 10) {
+      if (!sectionContent || sectionContent.length < MIN_CONTENT_LENGTH) {
         return null;
       }
       return apiRequest("POST", "/api/ai/analyze-section", {
@@ -30,11 +31,11 @@ export function AIAnalysisPanel({ sowId, sectionTitle, sectionContent }: AIAnaly
         sectionContent,
       });
     },
-    enabled: !!sowId && !!sectionTitle && !!sectionContent && sectionContent.length >= 10,
+    enabled: !!sowId && !!sectionTitle && !!sectionContent && sectionContent.length >= MIN_CONTENT_LENGTH,
     staleTime: 60000, // Cache for 1 minute
   });
 
-  if (!sectionContent || sectionContent.length < 10) {
+  if (!sectionContent || sectionContent.length < MIN_CONTENT_LENGTH) {
     return (
       <Card className="border-purple-200 bg-purple-50/50">
         <CardHeader className="pb-3">
@@ -46,7 +47,9 @@ export function AIAnalysisPanel({ sowId, sectionTitle, sectionContent }: AIAnaly
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-muted-foreground">Add content to see AI analysis and suggestions</p>
+          <p className="text-xs text-muted-foreground">
+            Add at least {MIN_CONTENT_LENGTH} characters to see AI analysis and suggestions
+          </p>
         </CardContent>
       </Card>
     );
@@ -129,16 +132,16 @@ export function AIAnalysisPanel({ sowId, sectionTitle, sectionContent }: AIAnaly
                 <div className="space-y-1">
                   <div className="flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3 text-green-600" />
-                    <span className="text-xs text-muted-foreground">Complete</span>
+                    <span className="text-xs text-muted-foreground">Relevance</span>
                   </div>
-                  <p className="text-sm font-bold">{analysis.completeness}%</p>
+                  <p className="text-sm font-bold">{analysis.relevance}%</p>
                   <Progress
-                    value={analysis.completeness}
+                    value={analysis.relevance}
                     className="h-1 bg-gray-100"
                     indicatorClassName={
-                      analysis.completeness >= 80
+                      analysis.relevance >= 80
                         ? "bg-green-600"
-                        : analysis.completeness >= 60
+                        : analysis.relevance >= 60
                           ? "bg-yellow-500"
                           : "bg-red-500"
                     }
