@@ -1,152 +1,165 @@
 # sow-gen
 SOW (Statement of Work) Generator
 
-This repository is a full-stack SOW generator app. It includes a React + Vite frontend and an Express + TypeScript backend. The project uses MongoDB for primary storage (migration helpers exist to move data from PostgreSQL). All references to Replit services have been removed and replaced with local/hackathon-oriented configuration.
+This repository is a full-stack SOW generator app. It includes a React + Vite frontend and an Express + TypeScript backend. The project uses MongoDB for primary storage.
 
 ## Tech stack
 
 - Frontend
-	- React 18
-	- Vite
-	- TypeScript
-	- Tailwind CSS
-	- Radix UI components
-- Backend
-	- Node.js (ESM), Express
-	- TypeScript
-	- Drizzle ORM (used previously for Postgres data access and for migration scripts)
-	- MongoDB (Mongoose) — primary data store after migration
-	- bcrypt (password hashing)
-	- express-session + connect-mongo (session storage in MongoDB)
-	- passport / passport-local (local auth scaffolding)
+	# SOW-Gen (Statement of Work Generator)
 
-## Prerequisites
+	Full‑stack app for drafting, reviewing, and exporting enterprise SOWs. React + Vite frontend, Express + TypeScript backend, MongoDB primary storage (PostgreSQL and in‑memory fallbacks supported). AI features assist with section authoring, analysis, inline suggestions, chat, and section recommendations.
 
-- Node.js (v18+ recommended) and npm
-- Git
-- MongoDB Community Server (installed and running as a service)
-- (Optional) PostgreSQL if you plan to migrate data from an existing Postgres instance
+	## Highlights
 
-On Windows you can install MongoDB Community Server from https://www.mongodb.com/try/download/community and run it as a service.
+	- SOW editor with rich text and table paste support (Quill custom table blot)
+	- Workflows, approvals, reassignment, and audit trail
+	- Exports to PDF and Word (.docx)
+		- PDF: proper table pagination, repeated table headers across pages, and a repeating header/footer on every page
+		- Word: semantic tables and headings
+	- AI features (pluggable provider)
+		- Generate content for a section
+		- Analyze section quality (scores + issues/suggestions)
+		- Inline writing suggestions
+		- Chat about the current SOW
+		- Suggest additional sections
 
-## Environment
+	## Tech stack
 
-Create a `.env` file in the repository root (copy from `.env.example` if present) and set the following variables:
+	- Frontend: React 18, Vite, TypeScript, Tailwind CSS, Radix UI
+	- Backend: Node.js (ESM), Express, TypeScript
+	- Storage: MongoDB (preferred), PostgreSQL (optional), in‑memory (dev fallback)
+	- Auth: express-session, bcrypt; Mongo or Postgres-backed user store
+	- Export: pdfkit (PDF), docx (Word)
+	- AI Providers: OpenAI Integrations (default), Azure OpenAI SDK, or local Ollama
 
-```
-MONGODB_URI=mongodb://127.0.0.1:27017/sow_gen
-PORT=3000
-NODE_ENV=development
-SESSION_SECRET=your_session_secret_here
-OPENAI_API_KEY=your_openai_api_key_here
-```
+	## Project structure (top‑level)
 
-If you have an existing PostgreSQL database you want to migrate from, you may also keep the Postgres connection env vars during migration:
+	- `client/` — React app (Vite)
+	- `server/` — Express API, auth, AI integration, export, storage
+	- `shared/` — shared schema and config
+	- `scripts/` — small maintenance utilities
 
-```
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=sow_gen_db
-DB_USER=postgres
-DB_PASSWORD=admin
-```
+	## Features
 
-## Install dependencies
+	### Editor and content
+	- Rich text editor with headings/lists/code and embedded tables
+	- Smart table paste: preserves HTML structure using a custom Quill blot
+	- Auto‑save with debounce, per‑section editing, re‑ordering, add/rename/delete sections
 
-From the repo root:
+	### Workflows and approvals
+	- Multi‑stage workflows with reviewers per stage
+	- Approve/mark reviewed, reassign reviewer, revert stage with remarks
+	- Audit trail records actions (status changes, reviewer changes, edits)
 
-```powershell
-npm install
-```
+	### Exports
+	- PDF and Word exports from the SOW editor
+	- Header and footer text fields in the export dialog
+	- PDF export details
+		- Repeating document header and footer on every page
+		- Tables paginate correctly; header row is repeated on page breaks
+		- Avoids mid‑page large gaps after long tables
 
-## Database migration (Postgres -> MongoDB)
+	### AI assistance
+	- Generate section content: `/api/ai/generate-content`
+	- Analyze section quality: `/api/ai/analyze-section`
+	- Inline suggestion while typing: `/api/ai/inline-suggestion`
+	- Chat about the SOW: `/api/ai/chat`
+	- Suggest additional sections: `/api/ai/suggest-sections`
 
-The repo contains migration scripts that will read from the existing Postgres schema and write documents into MongoDB. Only run these if you are migrating existing data.
+	Provider selection via `AI_PROVIDER`:
+	- `integrations` (default): existing OpenAI integrations client
+	- `azure`: official Azure OpenAI SDK
+	- `olama`: local Ollama server (offline)
 
-1. Ensure PostgreSQL is running and the connection env vars (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD) are set in your `.env`.
-2. Ensure MongoDB is running and `MONGODB_URI` is set.
-3. Run the migration script (TypeScript runtime `tsx` used by this repo):
+	## Prerequisites
 
-```powershell
-npx tsx server/migrate-data-v3.ts
-```
+	- Node.js 18+ and npm
+	- Git
+	- MongoDB Community Server (recommended) or PostgreSQL (optional)
 
-4. Verify migration:
+	Windows: install MongoDB Community Server from https://www.mongodb.com/try/download/community and run it as a service.
 
-```powershell
-npx tsx server/verify-migration.ts
-```
+	## Environment configuration
 
-Notes:
-- The migration scripts intentionally use relaxed schemas while migrating to avoid strict validation failures. After migration you can enable stronger validation or transform documents if desired.
+	Create a `.env` in repo root. Minimum:
 
-## Development
+	```ini
+	# Core server
+	PORT=3000
+	NODE_ENV=development
+	SESSION_SECRET=your_session_secret_here
 
-Run the app in development mode (starts backend + Vite dev server):
+	# Storage (prefer MongoDB)
+	MONGODB_URI=mongodb://127.0.0.1:27017/sow_gen
 
-```powershell
-npm run dev
-```
+	# AI provider selection
+	AI_PROVIDER=integrations  # integrations | azure | olama
 
-This will run the TypeScript backend entry at `server/index.ts` and the Vite frontend. Backend listens on the port defined in `PORT` and the frontend proxies `/api` to that port.
+	# OpenAI integrations (default provider)
+	AI_INTEGRATIONS_OPENAI_BASE_URL=https://api.openai.com/v1
+	AI_INTEGRATIONS_OPENAI_API_KEY=sk-...
 
-## Build & Production
+	# Azure OpenAI (when AI_PROVIDER=azure)
+	AZURE_OPENAI_ENDPOINT=https://<your-resource>.openai.azure.com
+	AZURE_OPENAI_KEY=...
+	AZURE_OPENAI_DEPLOYMENT=<deployment-name>
+	AZURE_OPENAI_API_VERSION=2024-04-01-preview
 
-To build the client and bundle the server for production:
+	# Ollama (when AI_PROVIDER=olama)
+	OLAMA_BASE_URL=http://127.0.0.1:11434
+	OLAMA_MODEL=llama2
 
-```powershell
-npm run build
-```
+	# Optional: PostgreSQL (fallback if Mongo not set)
+	DATABASE_URL=postgres://user:password@localhost:5432/sow_gen
+	```
 
-Then start the built server (after build step):
+	Notes
+	- If both `MONGODB_URI` and `DATABASE_URL` are unset/unavailable, an in‑memory store is used (dev only).
+	- Auth uses the configured store (Mongo preferred). On first run, an admin may be auto‑created (see `server/auth.ts`).
 
-```powershell
-NODE_ENV=production node dist/index.js
-```
+	## Install and run (development)
 
-## Authentication
+	```powershell
+	# From repo root
+	npm install
 
-- The project uses bcrypt-hashed passwords and session-based auth (express-session). Local auth endpoints are provided in `server/auth.ts`. If you used previous Replit auth flows, they have been removed and replaced with local/hackathon-friendly auth.
+	# Start backend + Vite dev server
+	npm run dev
+	```
 
-If you need to update a plaintext password in MongoDB to a bcrypt hash, use the hashing helper in `server/auth.ts` or create a small script that uses `bcrypt.hash()` then updates the user document.
+	- Backend listens on `PORT` (default 3000).
+	- Vite dev server proxies `/api` to the backend.
 
-## Replit references
+	## Build and run (production)
 
-All Replit-specific plugins and references were removed in favor of local tooling. Any visible branding that previously referenced "Replit" has been replaced with "Hackathon" or neutral text.
+	```powershell
+	# Build client and bundle server
+	npm run build
 
-## Troubleshooting
+	# Start built server
+	$env:NODE_ENV="production"; node dist/index.js
+	```
 
-- MongoDB connection refused: ensure the MongoDB service is running and `MONGODB_URI` points to `127.0.0.1:27017` (using `127.0.0.1` avoids some IPv6/localhost resolution issues).
-- Migration errors: double-check Postgres env vars, ensure `drizzle` schema matches your database, and run migration scripts with logs to identify missing fields.
-- Missing environment variables: copy `.env.example` to `.env` and fill required values.
+	## Key endpoints (server)
 
-## Useful commands
+	- SOWs: `GET/POST /api/sows`, `GET/PATCH/DELETE /api/sows/:id`, `POST /api/sows/:id/copy`
+	- Approvals & audit: `GET /api/sows/:id/approvals`, `PATCH /api/sow-approvals/:id`, `GET/POST /api/sows/:id/audit`, `POST /api/sows/:id/reassign`, `POST /api/sows/:id/revert`
+	- Templates & workflows: `GET/POST /api/templates`, `GET /api/templates/:id`, `GET/POST /api/workflows`, `GET /api/workflows/:id`
+	- Export: `POST /api/sows/:id/export` `{ format: "pdf" | "word", header?: string, footer?: string }`
+	- Auth: `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/change-password`
 
-```powershell
-# Install deps
-npm install
+	## PDF/Word export behavior
 
-# Run migration (if migrating from Postgres)
-npx tsx server/migrate-data-v3.ts
-npx tsx server/verify-migration.ts
+	- Word (.docx): semantic headings and tables using `docx`
+	- PDF: generated with `pdfkit`
+		- Repeats header and footer on every page
+		- Paginates tables and repeats the header row when a table spans pages
+		- After tables, content starts at a sensible position (no large gaps)
 
-# Start dev server
-npm run dev
+	## Troubleshooting
 
-# Build for production
-npm run build
-
-# Start built server
-NODE_ENV=production node dist/index.js
-```
-
-## Contact / Next steps
-
-If you want, I can:
-
-- Remove the old Postgres-related code and Drizzle configuration entirely after you're confident on MongoDB
-- Add stronger Mongoose schemas and indexing for production
-- Add tests for the migration and a rollback plan
-
-If you'd like one of those, tell me which and I'll implement it next.
-
+	- MongoDB connection refused: verify the service and `MONGODB_URI` (use `127.0.0.1` on Windows to avoid IPv6 issues)
+	- AI errors: confirm `AI_PROVIDER` and the corresponding credentials (Azure/OpenAI/Ollama)
+	- Dev server errors: check Node 18+, delete `node_modules` and reinstall if needed
+	- CSS issues in editor during type checking are surfaced by tooling, but do not block server start

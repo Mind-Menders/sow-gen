@@ -127,13 +127,42 @@ export async function generatePDF(sow: Sow, sections: SowSections, options: Expo
     doc.on("end", () => resolve(Buffer.concat(buffers)));
     doc.on("error", reject);
 
-    // Header
-    if (options.header) {
-      doc.fontSize(10).fillColor("#666").text(options.header, { align: "center" });
+    // Repeating header/footer helpers
+    const drawHeader = () => {
+      if (!options.header) return;
+      const initialY = doc.y;
+      doc.fontSize(10).fillColor("#666").text(options.header, {
+        align: "center",
+      });
       doc.moveDown();
       doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
       doc.moveDown();
-    }
+      // Ensure content starts below header line
+      // doc.y is already advanced by text and moveDown calls
+    };
+
+    const drawFooter = () => {
+      if (!options.footer) return;
+      const bottomY = doc.page.height - doc.page.margins.bottom + 10; // slightly into margin
+      const lineY = bottomY - 20;
+      doc.save();
+      doc.moveTo(50, lineY).lineTo(550, lineY).stroke();
+      doc.fontSize(10).fillColor("#666").text(options.footer, 50, lineY + 4, {
+        align: "center",
+        width: doc.page.width - 100,
+      });
+      doc.restore();
+    };
+
+    // Draw on first page
+    drawHeader();
+    drawFooter();
+
+    // Repeat on every new page
+    doc.on("pageAdded", () => {
+      drawHeader();
+      drawFooter();
+    });
 
     // Title and metadata
     doc.fontSize(24).fillColor("#000").text(sow.title, { align: "center" });
@@ -159,8 +188,16 @@ export async function generatePDF(sow: Sow, sections: SowSections, options: Expo
     doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
     doc.addPage();
 
+    // Helper to get page bounds
+    const pageTop = () => doc.page.margins.top;
+    const pageBottom = () => doc.page.height - doc.page.margins.bottom;
+
     // Sections
     sectionsList.forEach((section, index) => {
+      // Ensure there is enough space for a heading, otherwise start a new page
+      if (doc.y > pageBottom() - 40) {
+        doc.addPage();
+      }
       doc.fontSize(16).fillColor("#000").text(`${index + 1}. ${section.title}`);
       doc.moveDown();
       
@@ -177,41 +214,67 @@ export async function generatePDF(sow: Sow, sections: SowSections, options: Expo
         } else if (item.type === 'table') {
           // Render table in PDF
           const tableData = item.content as string[][];
-          const startX = 70;
-          let startY = doc.y;
-          const columnWidth = 120;
-          const rowHeight = 25;
-          
-          tableData.forEach((row, rowIndex) => {
-            const isHeader = rowIndex === 0;
-            
+
+          // Layout metrics
+          const availableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right - 40; // small side padding
+          const startX = doc.page.margins.left + 20;
+          const columns = Math.max(1, tableData[0]?.length || 1);
+          const columnWidth = availableWidth / columns;
+          const rowHeight = 24;
+
+          const headerRow = tableData[0] || [];
+          let y = doc.y;
+
+          // Helper to draw a single row (and handle page breaks)
+          const drawRow = (row: string[], isHeader: boolean) => {
+            // If the next row won't fit, add a page and repeat header
+            if (y + rowHeight > pageBottom()) {
+              doc.addPage();
+              // after header is drawn via pageAdded handler, doc.y is positioned correctly
+              y = doc.y;
+              // repeat header on new page
+              if (!isHeader && headerRow.length) {
+                drawRow(headerRow, true);
+              }
+            }
+
             row.forEach((cell, colIndex) => {
               const x = startX + (colIndex * columnWidth);
-              const y = startY + (rowIndex * rowHeight);
-              
-              // Draw cell border
-              doc.rect(x, y, columnWidth, rowHeight).stroke();
-              
-              // Fill header background
+
+              // Header background
               if (isHeader) {
+                doc.save();
                 doc.rect(x, y, columnWidth, rowHeight).fill("#f5f5f5");
-                doc.rect(x, y, columnWidth, rowHeight).stroke();
+                doc.restore();
               }
-              
-              // Draw cell text
+
+              // Cell border
+              doc.rect(x, y, columnWidth, rowHeight).stroke();
+
+              // Cell text
               doc.fontSize(10)
                 .fillColor("#000")
-                .text(cell, x + 5, y + 7, {
+                .text(cell || " ", x + 5, y + 6, {
                   width: columnWidth - 10,
-                  height: rowHeight - 10,
+                  height: rowHeight - 12,
                   align: "left",
                 });
             });
+
+            // Advance to next row position
+            y += rowHeight;
+          };
+
+          // Draw rows
+          tableData.forEach((row, rowIndex) => {
+            drawRow(row, rowIndex === 0);
           });
-          
-          // Move cursor below table
-          doc.y = startY + (tableData.length * rowHeight) + 10;
-          doc.moveDown();
+
+          // Move cursor below table for subsequent content
+          doc.y = y + 10;
+          if (doc.y > pageBottom() - 20) {
+            doc.addPage();
+          }
         }
       });
       
@@ -223,14 +286,7 @@ export async function generatePDF(sow: Sow, sections: SowSections, options: Expo
       }
     });
 
-    // Footer
-    if (options.footer) {
-      doc.addPage();
-      doc.moveDown(10);
-      doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
-      doc.moveDown();
-      doc.fontSize(10).fillColor("#666").text(options.footer, { align: "center" });
-    }
+    // Footer is drawn per-page by drawFooter()
 
     doc.end();
   });
