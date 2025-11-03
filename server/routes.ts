@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, type IStorage } from "./storage";
 import { insertSowSchema, insertTemplateSchema, insertUserSchema, insertWorkflowSchema } from "@shared/schema";
@@ -51,6 +52,32 @@ async function initializeStorage() {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // AI: Generate all sections for a SOW (bulk)
+  app.post("/api/sows/:id/ai-generate-all", async (req: import("express").Request, res: import("express").Response) => {
+    try {
+      const sow = await dbStorage.getSowById(req.params.id);
+      if (!sow) {
+        return res.status(404).json({ error: "SOW not found" });
+      }
+      let sections: Record<string, any> = {};
+      try {
+        const parsed = typeof sow.sections === "string" ? JSON.parse(sow.sections) : sow.sections;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          sections = parsed;
+        }
+      } catch (e) {
+        // fallback: empty object
+        sections = {};
+      }
+      const { generateAllSectionsAI } = await import("./ai-bulk-section");
+      const newSections = await generateAllSectionsAI(sow, sections);
+      await dbStorage.updateSow(sow.id, { sections: JSON.stringify(newSections) });
+      res.json({ success: true, sections: newSections });
+    } catch (error) {
+      console.error("AI bulk section generation error:", error);
+      res.status(500).json({ error: "Failed to generate all sections with AI" });
+    }
+  });
   // Initialize storage before registering routes
   await initializeStorage();
   

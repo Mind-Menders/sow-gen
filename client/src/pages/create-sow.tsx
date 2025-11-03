@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { Dialog } from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useLocation } from "wouter";
 import { ArrowLeft, ArrowRight, FileText, Building, FileStack, Users, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -58,6 +61,10 @@ export default function CreateSOW() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
+  // New: toggle for auto AI generation
+  const [autoAIGenerate, setAutoAIGenerate] = useState(false);
+  // Track the created SOW ID for navigation after AI generation
+  const [createdSowId, setCreatedSowId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     sowType: "",
@@ -82,6 +89,43 @@ export default function CreateSOW() {
 
   const { data: workflows = [] } = useQuery<Workflow[]>({
     queryKey: ["/api/workflows"],
+  });
+
+  // New: AI bulk generation mutation
+  const aiBulkMutation = useMutation({
+    mutationFn: async (sowId: string) => {
+      const response = await apiRequest("POST", `/api/sows/${sowId}/ai-generate-all`, {});
+      return { sowId, ...response };
+    },
+    onSuccess: async (data) => {
+      const sowId = data.sowId;
+      
+      // Invalidate queries to mark them as stale
+      queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
+      
+      // Remove the query from cache to force a fresh fetch
+      queryClient.removeQueries({ queryKey: [`/api/sows/${sowId}`] });
+      
+      toast({
+        title: "SOW Created with AI Content",
+        description: "All sections have been filled with AI-generated content.",
+      });
+      
+      // Navigate to editor - it will fetch fresh data
+      setLocation(`/editor?id=${sowId}`);
+    },
+    onError: (error, sowId) => {
+      console.error("AI generation error:", error);
+      toast({
+        title: "AI Generation Failed",
+        description: "SOW created but AI generation failed. You can edit sections manually.",
+        variant: "destructive",
+      });
+      
+      // Still navigate to editor even if AI generation failed
+      setLocation(`/editor?id=${sowId}`);
+    },
   });
 
   const createSowMutation = useMutation({
@@ -109,20 +153,29 @@ export default function CreateSOW() {
         budget: formData.budget || undefined,
         currency: formData.currency || "USD",
         requirements: formData.requirements || undefined,
-  // If a workflow is selected, set to pending_review so approvals can be created
-  status: formData.workflowId ? "pending_review" : "draft",
+        // If a workflow is selected, set to pending_review so approvals can be created
+        status: formData.workflowId ? "pending_review" : "draft",
         workflowId: formData.workflowId || undefined,
         createdBy: user?.id || undefined,
         sections: sectionsData,
       });
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
-      toast({
-        title: "SOW Created",
-        description: "Your Statement of Work has been created successfully.",
-      });
-      setLocation(`/editor?id=${data.id}`);
+      
+      if (autoAIGenerate && data?.id) {
+        // Don't show "SOW Created" toast yet if AI generation is enabled
+        // We'll navigate after AI generation completes
+        await aiBulkMutation.mutateAsync(data.id);
+        // Navigation happens in aiBulkMutation.onSuccess
+      } else {
+        // If no AI generation, show toast and navigate immediately
+        toast({
+          title: "SOW Created",
+          description: "Your Statement of Work has been created successfully.",
+        });
+        setLocation(`/editor?id=${data.id}`);
+      }
     },
   });
 
@@ -146,9 +199,29 @@ export default function CreateSOW() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="w-full mx-auto p-8 space-y-8">
-        <div className="flex items-center gap-4">
+    <>
+      {/* Loader dialog for SOW creation and AI bulk generation */}
+      {(createSowMutation.isPending || aiBulkMutation.isPending) && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40">
+          <div className="bg-white rounded-lg shadow-lg p-8 flex flex-col items-center gap-4 min-w-[320px]">
+            <Loader2 className="animate-spin w-10 h-10 text-primary" />
+            <div className="text-lg font-semibold text-center">
+              {createSowMutation.isPending && !aiBulkMutation.isPending
+                ? "Creating your SOW..."
+                : "Generating all sections with AI..."}
+            </div>
+            <div className="text-sm text-muted-foreground text-center">
+              {createSowMutation.isPending && !aiBulkMutation.isPending
+                ? "Setting up your Statement of Work..."
+                : "This may take up to a minute for large SOWs."}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="flex-1 overflow-y-auto">
+        <div className="w-full mx-auto p-8 space-y-8">
+          <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => setLocation("/")} data-testid="button-back-to-dashboard">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Dashboard
@@ -397,6 +470,8 @@ export default function CreateSOW() {
 
             {currentStep === 4 && (
               <div className="space-y-6">
+               
+                
                 <h3 className="text-lg font-semibold mb-4">Select Approval Workflow</h3>
                 <p className="text-sm text-muted-foreground mb-6">
                   Choose the approval workflow that matches your SOW type
@@ -474,6 +549,27 @@ export default function CreateSOW() {
                     </div>
                   )}
                 </div>
+
+                 {/* AI Generation Toggle */}
+                <Card className="border-purple-200 bg-purple-50/30">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start gap-4">
+                      <Switch
+                        id="auto-ai-generate"
+                        checked={autoAIGenerate}
+                        onCheckedChange={setAutoAIGenerate}
+                      />
+                      <div className="flex-1">
+                        <Label htmlFor="auto-ai-generate" className="cursor-pointer text-base font-semibold">
+                          Auto-generate all sections with AI
+                        </Label>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Enable this to automatically generate content for all SOW sections using AI after creation. This will save time but you can always edit the content later.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
           </CardContent>
@@ -491,22 +587,24 @@ export default function CreateSOW() {
           </Button>
           <Button
             onClick={handleNext}
-            disabled={!canProceed() || createSowMutation.isPending}
+            disabled={!canProceed() || createSowMutation.isPending || aiBulkMutation.isPending}
             data-testid="button-next"
           >
-            {createSowMutation.isPending ? (
-              "Creating..."
-            ) : currentStep === 4 ? (
-              "Create SOW"
-            ) : (
-              <>
-                Next
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </>
-            )}
+            {createSowMutation.isPending
+              ? "Creating..."
+              : aiBulkMutation.isPending
+                ? "Generating with AI..."
+                : currentStep === 4
+                  ? (autoAIGenerate ? "Create & Auto-Generate" : "Create SOW")
+                  : <>
+                      Next
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </>
+            }
           </Button>
         </div>
       </div>
     </div>
+    </>
   );
 }
