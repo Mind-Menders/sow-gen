@@ -12,6 +12,7 @@ import {
   SidebarMenuItem,
   SidebarFooter,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -65,6 +66,7 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { isMobile, setOpen } = useSidebar();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
@@ -151,10 +153,18 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar>
-      <SidebarHeader className="p-6 border-b">
+    <Sidebar
+      collapsible="icon"
+      onMouseEnter={() => {
+        if (!isMobile) setOpen(true);
+      }}
+      onMouseLeave={() => {
+        if (!isMobile) setOpen(false);
+      }}
+    >
+      <SidebarHeader className="p-6 border-b overflow-hidden group-data-[collapsible=icon]:p-3">
         {/* Emirates Logo - Full Width */}
-        <div className="mb-4">
+        <div className="mb-4 group-data-[collapsible=icon]:hidden">
           <div className="bg-[#D71921] px-6 py-8 rounded-lg shadow-lg">
             <img 
               src="https://c.ekstatic.net/ecl/logos/emirates/emirates-logo-badge.svg?h=d-52wmsnqryhi7L83BAKpg" 
@@ -163,8 +173,18 @@ export function AppSidebar() {
             />
           </div>
         </div>
+        {/* Compact logo for collapsed state */}
+        <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center mb-2">
+          <div className="bg-[#D71921] rounded-md w-12 h-12 flex items-center justify-center">
+            <img 
+              src="https://c.ekstatic.net/ecl/logos/emirates/emirates-logo-badge.svg?h=d-52wmsnqryhi7L83BAKpg" 
+              alt="Emirates" 
+              className="w-10 h-10 object-contain"
+            />
+          </div>
+        </div>
         
-        <div className="space-y-1"><center>
+        <div className="space-y-1 group-data-[collapsible=icon]:hidden"><center>
           <h1 className="text-xl font-bold text-foreground" data-testid="text-app-title">
             SOW Gen.ai
           </h1>
@@ -172,7 +192,7 @@ export function AppSidebar() {
           </center>
         </div>
       </SidebarHeader>
-      <SidebarContent className="px-3 py-6">
+      <SidebarContent className="px-3 py-6 group-data-[collapsible=icon]:px-3">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-2">
@@ -183,12 +203,13 @@ export function AppSidebar() {
                     <SidebarMenuButton 
                       asChild 
                       isActive={isActive} 
-                      className={`h-12 text-base ${isActive ? 'bg-primary/10 border-l-4 border-l-primary text-primary font-semibold' : ''}`}
+                      tooltip={item.title}
+                      className={`h-12 text-base group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center ${isActive ? 'bg-primary/10 border-l-4 border-l-primary text-primary font-semibold group-data-[collapsible=icon]:border-l-0' : ''}`}
                       data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
                     >
-                      <Link href={item.url} className="flex items-center gap-3 px-3">
+                      <Link href={item.url} className="flex items-center gap-3 px-3 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:justify-center">
                         <item.icon className={`w-5 h-5 ${isActive ? 'text-primary' : item.color}`} />
-                        <span className={isActive ? 'text-primary' : ''}>{item.title}</span>
+                        <span className={`truncate ${isActive ? 'text-primary' : ''}`}>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

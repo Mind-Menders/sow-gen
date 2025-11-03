@@ -48,7 +48,7 @@ function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
   const style = {
     "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
+    "--sidebar-width-icon": "5rem",
   };
 
   if (isLoading || !isAuthenticated) {
@@ -56,7 +56,7 @@ function AppContent() {
   }
 
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
+    <SidebarProvider defaultOpen={false} style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
         <AppSidebar />
         <main className="flex-1 overflow-auto w-full">

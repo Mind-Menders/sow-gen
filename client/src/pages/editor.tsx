@@ -1082,7 +1082,7 @@ export default function Editor() {
           </TabsList>
 
           <TabsContent value="editor" className="mt-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-[18px] pl-[1px] pr-[1px] ml-[1px] mr-[1px] pt-[1px] pb-[1px]">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 text-[18px] pl-[1px] pr-[1px] ml-[1px] mr-[1px] pt-[1px] pb-[1px]">
           <div className="lg:col-span-1">
             <Card className="border-card-border sticky top-6">
               <CardHeader>
@@ -1148,9 +1148,9 @@ export default function Editor() {
                             <p className="text-sm font-medium text-foreground mb-1">
                               {index + 1}. {section.title}
                             </p>
-                            {section.content && (
+                            {/* {section.content && (
                               <p className="text-xs text-muted-foreground line-clamp-2">{section.content.substring(0, 60)}...</p>
-                            )}
+                            )} */}
                           </div>
                           {isCompleted && <Check className="w-4 h-4 text-green-600 flex-shrink-0" />}
                         </div>
@@ -1191,15 +1191,6 @@ export default function Editor() {
           <div className="lg:col-span-2 space-y-6">
             {selectedSection && sections[selectedSection] && (
               <>
-                {/* AI Analysis Panel */}
-                <AIContainer>
-                  <AIAnalysisPanel
-                    sowId={sowId!}
-                    sectionTitle={sections[selectedSection].title}
-                    sectionContent={editContent}
-                  />
-                </AIContainer>
-
                 <Card className="border-card-border">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-3">
@@ -1232,9 +1223,22 @@ export default function Editor() {
                 </Card>
               </>
             )}
+          </div>
+
+          {/* Right Column: AI Panels */}
+          <div className="lg:col-span-1 space-y-6">
+            {selectedSection && sections[selectedSection] && (
+              <AIContainer>
+                <AIAnalysisPanel
+                  sowId={sowId!}
+                  sectionTitle={sections[selectedSection].title}
+                  sectionContent={editContent}
+                />
+              </AIContainer>
+            )}
 
             <AIContainer>
-              <Card className="border-card-border">
+              <Card className="border-card-border sticky top-6">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <AIBadge tooltip="AI-Powered Content Generation">
@@ -1244,83 +1248,83 @@ export default function Editor() {
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">Generate professional content suggestions using AI</p>
                 </CardHeader>
-              <CardContent className="space-y-4">
-                <Button 
-                  variant="outline" 
-                  size="default"
-                  className="w-full h-11 rounded-lg transition-all hover:shadow-md" 
-                  onClick={() => generateAiMutation.mutate()}
-                  disabled={generateAiMutation.isPending || !selectedSection}
-                  data-testid="button-generate-ai"
-                >
-                  <Sparkles className="w-5 h-5 mr-2" />
-                  {generateAiMutation.isPending ? "Generating..." : "Generate Content"}
-                </Button>
-                
-                {aiSuggestion ? (
-                  <div className="space-y-3">
-                    <div className="p-4 rounded-md border border-card-border bg-card prose prose-sm max-w-none">
-                      <div 
-                        dangerouslySetInnerHTML={{ __html: aiSuggestion }}
-                        className="text-sm"
-                      />
+                <CardContent className="space-y-4">
+                  <Button 
+                    variant="outline" 
+                    size="default"
+                    className="w-full h-11 rounded-lg transition-all hover:shadow-md" 
+                    onClick={() => generateAiMutation.mutate()}
+                    disabled={generateAiMutation.isPending || !selectedSection}
+                    data-testid="button-generate-ai"
+                  >
+                    <Sparkles className="w-5 h-5 mr-2" />
+                    {generateAiMutation.isPending ? "Generating..." : "Generate Content"}
+                  </Button>
+
+                  {aiSuggestion ? (
+                    <div className="space-y-3">
+                      <div className="p-4 rounded-md border border-card-border bg-card prose prose-sm max-w-none">
+                        <div 
+                          dangerouslySetInnerHTML={{ __html: aiSuggestion }}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="default" 
+                          variant="default"
+                          className="flex-1 h-10 rounded-lg transition-all hover:shadow-md"
+                          onClick={() => {
+                            setEditContent(aiSuggestion);
+                            setHasUnsavedChanges(true);
+                            setAiSuggestion("");
+                            toast({
+                              title: "Content Inserted",
+                              description: "AI suggestion has been inserted into the editor.",
+                            });
+                          }}
+                          data-testid="button-insert-ai"
+                        >
+                          Insert
+                        </Button>
+                        <Button 
+                          size="default" 
+                          variant="outline"
+                          className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
+                          onClick={() => {
+                            navigator.clipboard.writeText(aiSuggestion);
+                            toast({
+                              title: "Copied",
+                              description: "AI suggestion copied to clipboard.",
+                            });
+                          }}
+                          data-testid="button-copy-ai"
+                        >
+                          Copy
+                        </Button>
+                        <Button 
+                          size="default" 
+                          variant="ghost"
+                          className="h-10 px-5 rounded-lg transition-all hover:bg-accent"
+                          onClick={() => setAiSuggestion("")}
+                          data-testid="button-clear-ai"
+                        >
+                          Clear
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button 
-                        size="default" 
-                        variant="default"
-                        className="flex-1 h-10 rounded-lg transition-all hover:shadow-md"
-                        onClick={() => {
-                          setEditContent(aiSuggestion);
-                          setHasUnsavedChanges(true);
-                          setAiSuggestion("");
-                          toast({
-                            title: "Content Inserted",
-                            description: "AI suggestion has been inserted into the editor.",
-                          });
-                        }}
-                        data-testid="button-insert-ai"
-                      >
-                        Insert
-                      </Button>
-                      <Button 
-                        size="default" 
-                        variant="outline"
-                        className="h-10 px-5 rounded-lg transition-all hover:shadow-md"
-                        onClick={() => {
-                          navigator.clipboard.writeText(aiSuggestion);
-                          toast({
-                            title: "Copied",
-                            description: "AI suggestion copied to clipboard.",
-                          });
-                        }}
-                        data-testid="button-copy-ai"
-                      >
-                        Copy
-                      </Button>
-                      <Button 
-                        size="default" 
-                        variant="ghost"
-                        className="h-10 px-5 rounded-lg transition-all hover:bg-accent"
-                        onClick={() => setAiSuggestion("")}
-                        data-testid="button-clear-ai"
-                      >
-                        Clear
-                      </Button>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-muted-foreground">No suggestions yet. Generate content to get started.</p>
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-muted-foreground">No suggestions yet. Generate content to get started.</p>
-                  </div>
-                )}
-                
-                <p className="text-xs text-muted-foreground text-center border-t pt-4">
-                  Powered by Gemma3 / Azure AI GPT-5
-                  <br />
-                </p>
-              </CardContent>
-            </Card>
+                  )}
+
+                  <p className="text-xs text-muted-foreground text-center border-t pt-4">
+                    Powered by Gemma3 / Azure AI GPT-5
+                    <br />
+                  </p>
+                </CardContent>
+              </Card>
             </AIContainer>
           </div>
         </div>
