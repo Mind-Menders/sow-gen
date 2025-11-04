@@ -300,7 +300,7 @@ export async function analyzeSectionQuality(
   score: number;
   clarity: number;
   relevance: number;
-  professionalism: number;
+  completeness: number;
   issues: string[];
   suggestions: string[];
   missingInfo: string[];
@@ -314,7 +314,7 @@ Content: ${sectionContent || "(empty)"}
 
 You MUST respond with ONLY a valid JSON object. Do not include any markdown formatting, code blocks, or explanatory text. Make sure scoring is purely based on the content provided above, make the scoring 0 if no content present.
 Use this exact format:
-{"score": 85, "clarity": 90, "relevance": 80, "professionalism": 85, "issues": ["issue1"], "suggestions": ["suggestion1"], "missingInfo": ["missing1"]}
+{"score": 85, "clarity": 90, "relevance": 80, "completeness": 85, "issues": ["issue1"], "suggestions": ["suggestion1"], "missingInfo": ["missing1"]}
 
 Your response:`;
 
@@ -349,7 +349,7 @@ Your response:`;
       score: typeof parsed.score === 'number' ? parsed.score : 0,
       clarity: typeof parsed.clarity === 'number' ? parsed.clarity : 0,
       relevance: typeof parsed.relevance === 'number' ? parsed.relevance : 0,
-      professionalism: typeof parsed.professionalism === 'number' ? parsed.professionalism : 0,
+      completeness: typeof parsed.completeness === 'number' ? parsed.completeness : 0,
       issues: Array.isArray(parsed.issues) ? parsed.issues : [],
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
       missingInfo: Array.isArray(parsed.missingInfo) ? parsed.missingInfo : []
@@ -361,7 +361,7 @@ Your response:`;
       score: 0,
       clarity: 0,
       relevance: 0,
-      professionalism: 0,
+      completeness: 0,
       issues: ["Analysis temporarily unavailable. Please try again."],
       suggestions: [],
       missingInfo: []

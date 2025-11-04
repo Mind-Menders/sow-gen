@@ -150,16 +150,16 @@ export function AIAnalysisPanel({ sowId, sectionTitle, sectionContent }: AIAnaly
                 <div className="space-y-1">
                   <div className="flex items-center gap-1">
                     <Sparkles className="w-3 h-3 text-purple-600" />
-                    <span className="text-xs text-muted-foreground">Professional</span>
+                    <span className="text-xs text-muted-foreground">Completeness</span>
                   </div>
-                  <p className="text-sm font-bold">{analysis.professionalism}%</p>
+                  <p className="text-sm font-bold">{analysis.completeness}%</p>
                   <Progress
-                    value={analysis.professionalism}
+                    value={analysis.completeness}
                     className="h-1 bg-gray-100"
                     indicatorClassName={
-                      analysis.professionalism >= 80
+                      analysis.completeness >= 80
                         ? "bg-green-600"
-                        : analysis.professionalism >= 60
+                        : analysis.completeness >= 60
                           ? "bg-yellow-500"
                           : "bg-red-500"
                     }
