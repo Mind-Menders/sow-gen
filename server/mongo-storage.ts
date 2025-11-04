@@ -70,6 +70,7 @@ interface MongoSow {
   sowNumber: string;
   title: string;
   vendorName: string;
+  client?: string | null;
   sponsor?: string | null;
   sowType: string;
   status: string;
@@ -372,6 +373,7 @@ export class MongoStorage implements IStorage {
       sowNumber: mongoSow.sowNumber,
       title: mongoSow.title,
       vendorName: mongoSow.vendorName,
+      client: mongoSow.client ?? "Emirates",
       sponsor: mongoSow.sponsor ?? null,
       sowType: mongoSow.sowType,
       status: mongoSow.status,
@@ -379,12 +381,12 @@ export class MongoStorage implements IStorage {
       initiative: mongoSow.initiative ?? "",
       deliveryPortfolio: mongoSow.deliveryPortfolio ?? null,
       businessOwner: mongoSow.businessOwner ?? null,
-      startDate: mongoSow.startDate ?? null,
-      endDate: mongoSow.endDate ?? null,
+      startDate: mongoSow.startDate ?? "",
+      endDate: mongoSow.endDate ?? "",
       budget: mongoSow.budget ?? null,
       currency: mongoSow.currency ?? null,
       workflowId: mongoSow.workflowId ?? null,
-      requirements: mongoSow.requirements ?? null,
+      requirements: mongoSow.requirements ?? "",
       createdBy: mongoSow.createdBy ?? null,
       createdAt: mongoSow.createdAt,
       updatedAt: mongoSow.updatedAt,
@@ -425,6 +427,7 @@ export class MongoStorage implements IStorage {
       initiative: insertSow.initiative,
       deliveryPortfolio: insertSow.deliveryPortfolio,
       vendorName: insertSow.vendorName,
+      client: insertSow.client || "Emirates",
       sponsor: insertSow.sponsor,
       businessOwner: insertSow.businessOwner,
       startDate: insertSow.startDate,

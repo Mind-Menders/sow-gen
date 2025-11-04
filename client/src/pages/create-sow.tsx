@@ -74,6 +74,7 @@ export default function CreateSOW() {
     sponsor: "",
     businessOwner: "",
     vendorName: "",
+    client: "Emirates",
     startDate: "",
     endDate: "",
     budget: "",
@@ -146,13 +147,14 @@ export default function CreateSOW() {
         initiative: formData.initiative,
         deliveryPortfolio: formData.deliveryPortfolio || undefined,
         vendorName: formData.vendorName,
+        client: formData.client,
         sponsor: formData.sponsor || undefined,
         businessOwner: formData.businessOwner || undefined,
-        startDate: formData.startDate || undefined,
-        endDate: formData.endDate || undefined,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
         budget: formData.budget || undefined,
         currency: formData.currency || "USD",
-        requirements: formData.requirements || undefined,
+        requirements: formData.requirements,
         // If a workflow is selected, set to pending_review so approvals can be created
         status: formData.workflowId ? "pending_review" : "draft",
         workflowId: formData.workflowId || undefined,
@@ -185,7 +187,7 @@ export default function CreateSOW() {
 
   const canProceed = () => {
     if (currentStep === 1) return !!formData.sowType;
-    if (currentStep === 2) return !!formData.title && !!formData.initiative && !!formData.vendorName;
+    if (currentStep === 2) return !!formData.title && !!formData.initiative && !!formData.vendorName && !!formData.client && !!formData.startDate && !!formData.endDate && !!formData.requirements;
     if (currentStep === 3) return !!formData.templateId;
     return true;
   };
@@ -366,9 +368,20 @@ export default function CreateSOW() {
                   />
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="client">Client *</Label>
+                  <Input
+                    id="client"
+                    placeholder="Client name"
+                    value={formData.client}
+                    onChange={(e) => setFormData({ ...formData, client: e.target.value })}
+                    data-testid="input-client"
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="startDate">Start Date</Label>
+                    <Label htmlFor="startDate">Start Date *</Label>
                     <Input
                       id="startDate"
                       type="date"
@@ -378,7 +391,7 @@ export default function CreateSOW() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="endDate">End Date</Label>
+                    <Label htmlFor="endDate">End Date *</Label>
                     <Input
                       id="endDate"
                       type="date"
@@ -415,7 +428,7 @@ export default function CreateSOW() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="requirements">Requirements</Label>
+                  <Label htmlFor="requirements">Requirements *</Label>
                   <Textarea
                     id="requirements"
                     placeholder="Enter key requirements and expectations for this SOW..."

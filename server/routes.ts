@@ -479,6 +479,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           vendorName: sow.vendorName,
           sowType: sow.sowType,
           requirements: sow.requirements || undefined,
+          startDate: sow.startDate,
+          endDate: sow.endDate,
+          client: sow.client || "Emirates",
         }
       );
 

@@ -198,8 +198,12 @@ export async function generatePDF(sow: Sow, sections: SowSections, options: Expo
       if (doc.y > pageBottom() - 40) {
         doc.addPage();
       }
+      // Add 2x spacing before section heading (except for first section after TOC)
+      if (index > 0) {
+        doc.moveDown(2);
+      }
       doc.fontSize(16).fillColor("#000").text(`${index + 1}. ${section.title}`);
-      doc.moveDown();
+      doc.moveDown(1.5); // 1.5x spacing after heading
       
       // Parse and render HTML content
       const contentItems = parseHTMLContent(section.content || "(No content)");
@@ -209,8 +213,9 @@ export async function generatePDF(sow: Sow, sections: SowSections, options: Expo
           doc.fontSize(12).fillColor("#333").text(item.content, {
             align: "left",
             indent: 20,
+            lineGap: 3, // 1.25x line spacing (default is ~2.4, this adds 3 extra)
           });
-          doc.moveDown();
+          doc.moveDown(1.5); // 1.5x spacing between paragraphs
         } else if (item.type === 'table') {
           // Render table in PDF
           const tableData = item.content as string[][];
@@ -378,7 +383,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
       new Paragraph({
         text: `${index + 1}. ${section.title}`,
         heading: HeadingLevel.HEADING_2,
-        spacing: { before: 400, after: 200 },
+        spacing: { before: 800, after: 300 }, // 2x spacing before heading, 1.5x after
       })
     );
     
@@ -390,7 +395,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
         docChildren.push(
           new Paragraph({
             text: item.content,
-            spacing: { after: 200 },
+            spacing: { after: 300, line: 312 }, // 1.25x line spacing (312 twips = 1.25x of 240 base)
           })
         );
       } else if (item.type === 'table') {

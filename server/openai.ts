@@ -38,6 +38,9 @@ function buildPrompt(
     vendorName: string; 
     sowType: string;
     requirements?: string;
+    startDate?: string;
+    endDate?: string;
+    client?: string;
   }
 ) {
   return `You are an expert at writing Statement of Work (SOW) documents for enterprise projects.
@@ -45,9 +48,11 @@ function buildPrompt(
 Project Context:
 - Project Title: ${sowContext.title}
 - Vendor: ${sowContext.vendorName}
+- Client: ${sowContext.client || 'Emirates'}
 - SOW Type: ${sowContext.sowType}
 ${sowContext.requirements ? `- Requirements: ${sowContext.requirements}` : ''}
 
+${sowContext.startDate && sowContext.endDate ? `Include timelines in the generated content based on the start date ${sowContext.startDate} and end date ${sowContext.endDate}.` : ''}
 Current Section: ${sectionTitle}
 Current Content: ${sectionContent || "(empty)"}
 
@@ -84,6 +89,9 @@ export async function generateContentSuggestion(
     vendorName: string; 
     sowType: string;
     requirements?: string;
+    startDate?: string;
+    endDate?: string;
+    client?: string;
   }
 ): Promise<string> {
   const prompt = buildPrompt(sectionTitle, sectionContent, sowContext);

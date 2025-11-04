@@ -39,6 +39,7 @@ export default function EditSOW() {
     sponsor: "",
     businessOwner: "",
     vendorName: "",
+    client: "Emirates",
     startDate: "",
     endDate: "",
     budget: "",
@@ -70,6 +71,7 @@ export default function EditSOW() {
         sponsor: sow.sponsor || "",
         businessOwner: sow.businessOwner || "",
         vendorName: sow.vendorName,
+        client: sow.client || "Emirates",
         startDate: sow.startDate || "",
         endDate: sow.endDate || "",
         budget: sow.budget || "",
@@ -90,13 +92,14 @@ export default function EditSOW() {
         initiative: formData.initiative,
         deliveryPortfolio: formData.deliveryPortfolio || undefined,
         vendorName: formData.vendorName,
+        client: formData.client,
         sponsor: formData.sponsor || undefined,
         businessOwner: formData.businessOwner || undefined,
-        startDate: formData.startDate || undefined,
-        endDate: formData.endDate || undefined,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
         budget: formData.budget || undefined,
         currency: formData.currency || "USD",
-        requirements: formData.requirements || undefined,
+        requirements: formData.requirements,
         workflowId: formData.workflowId === "none" ? undefined : formData.workflowId || undefined,
       });
     },
@@ -264,9 +267,20 @@ export default function EditSOW() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="client">Client *</Label>
+                <Input
+                  id="client"
+                  placeholder="Client name"
+                  value={formData.client}
+                  onChange={(e) => setFormData({ ...formData, client: e.target.value })}
+                  data-testid="input-client"
+                />
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="startDate">Start Date</Label>
+                  <Label htmlFor="startDate">Start Date *</Label>
                   <Input
                     id="startDate"
                     type="date"
@@ -276,7 +290,7 @@ export default function EditSOW() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="endDate">End Date</Label>
+                  <Label htmlFor="endDate">End Date *</Label>
                   <Input
                     id="endDate"
                     type="date"
