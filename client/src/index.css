@@ -394,12 +394,13 @@
 
   /* Improved Editor Line Spacing */
   .ql-editor {
-    line-height: 1.25;
+    line-height: 1.6;
+    font-size: 16px;
   }
 
   .ql-editor p {
-    margin-bottom: 0.75em;
-    line-height: 1.25;
+    margin-bottom: 1em;
+    line-height: 1.6;
   }
 
   .ql-editor h1,
@@ -408,26 +409,74 @@
   .ql-editor h4,
   .ql-editor h5,
   .ql-editor h6 {
-    margin-top: 2em;
-    margin-bottom: 0.5em;
+    margin-top: 1.75em;
+    margin-bottom: 0.75em;
     line-height: 1.3;
+    font-weight: 600;
   }
 
   .ql-editor h1:first-child,
   .ql-editor h2:first-child,
   .ql-editor h3:first-child {
-    margin-top: 0;
+    margin-top: 0.5em;
+  }
+
+  .ql-editor h2 {
+    font-size: 1.75em;
+    margin-top: 2em;
+    margin-bottom: 0.75em;
+    padding-top: 0.5em;
+    border-bottom: 2px solid hsl(var(--border));
+    padding-bottom: 0.5em;
+  }
+
+  .ql-editor h3 {
+    font-size: 1.4em;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .ql-editor h4 {
+    font-size: 1.15em;
+    margin-top: 1.25em;
+    margin-bottom: 0.5em;
   }
 
   .ql-editor ul,
   .ql-editor ol {
     margin-top: 1em;
     margin-bottom: 1em;
+    padding-left: 2em;
   }
 
   .ql-editor li {
-    line-height: 1.25;
-    margin-bottom: 0.25em;
+    line-height: 1.6;
+    margin-bottom: 0.5em;
+  }
+
+  .ql-editor br {
+    display: block;
+    content: "";
+    margin-top: 0.5em;
+  }
+
+  /* Add spacing after headings when followed by content */
+  .ql-editor h2 + p,
+  .ql-editor h2 + ul,
+  .ql-editor h2 + ol {
+    margin-top: 1em;
+  }
+
+  .ql-editor h3 + p,
+  .ql-editor h3 + ul,
+  .ql-editor h3 + ol {
+    margin-top: 0.75em;
+  }
+
+  .ql-editor h4 + p,
+  .ql-editor h4 + ul,
+  .ql-editor h4 + ol {
+    margin-top: 0.5em;
   }
 
   /* AI Generated Content Styles */

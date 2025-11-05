@@ -29,6 +29,34 @@ function getAzureClient(): AzureOpenAI {
   return cachedAzureClient;
 }
 
+/**
+ * Add proper spacing to AI-generated HTML content
+ * Ensures headings have adequate spacing and line breaks
+ */
+function addProperSpacing(html: string): string {
+  if (!html) return html;
+  
+  // Add spacing after headings (h2, h3, h4)
+  html = html.replace(/(<\/h2>)/gi, '$1<br>');
+  html = html.replace(/(<\/h3>)/gi, '$1<br>');
+  html = html.replace(/(<\/h4>)/gi, '$1<br>');
+  
+  // Add spacing before headings (except first one)
+  html = html.replace(/(<h2(?:\s[^>]*)?>)/gi, '<br><br>$1');
+  html = html.replace(/(<h3(?:\s[^>]*)?>)/gi, '<br><br>$1');
+  html = html.replace(/(<h4(?:\s[^>]*)?>)/gi, '<br>$1');
+  
+  // Remove double spacing at the beginning
+  html = html.replace(/^(<br>\s*)+/i, '');
+  
+  // Add spacing between paragraphs and lists
+  html = html.replace(/(<\/p>)(\s*)(<p>)/gi, '$1<br>$3');
+  html = html.replace(/(<\/ul>|<\/ol>)(\s*)(<p>)/gi, '$1<br><br>$3');
+  html = html.replace(/(<\/p>)(\s*)(<ul>|<ol>)/gi, '$1<br>$3');
+  
+  return html;
+}
+
 
 function buildPrompt(
   sectionTitle: string, 
@@ -68,10 +96,13 @@ Output format requirements:
 - Do NOT include <html>, <head>, or <body> tags; return an HTML fragment
 - Start with a top-level heading for the section title using <h2>${sectionTitle}</h2>
 - Use <h3> and <h4> for subheadings
+- IMPORTANT: Add line breaks between sections - use <br> tags after headings and between major content blocks
+- Add empty <p></p> tags between major sections to create visual spacing
 - Use semantic elements (p, ul/ol, table, thead, tbody, tr, th, td)
 - Keep links absolute text only (no external JS or inline scripts/styles)
+- Ensure proper spacing: headings should be followed by line breaks before content
 
-Return ONLY the HTML fragment.`;
+Return ONLY the HTML fragment with proper spacing.`;
 }
 
 /**
@@ -118,6 +149,8 @@ export async function generateContentSuggestion(
       if (text.startsWith('```')) {
         text = text.replace(/^```(?:html|markdown)?\s*/i, '').replace(/```\s*$/i, '').trim();
       }
+      // Add proper spacing to generated content
+      text = addProperSpacing(text);
       console.log("[AI:olama] response length:", text.length, "characters");
       return text;
     } catch (err: any) {
@@ -136,7 +169,9 @@ export async function generateContentSuggestion(
             stream: false,
           });
           
-          const text = response.response || "";
+          let text = response.response || "";
+          // Add proper spacing to generated content
+          text = addProperSpacing(text);
           console.log("[AI:olama] response length (ipv4 retry):", text.length, "characters");
           return text;
         } catch (err2) {
@@ -166,6 +201,8 @@ export async function generateContentSuggestion(
       if (content.startsWith('```')) {
         content = content.replace(/^```(?:html|markdown)?\s*/i, '').replace(/```\s*$/i, '').trim();
       }
+      // Add proper spacing to generated content
+      content = addProperSpacing(content);
       console.log("[AI:azure-sdk] response length:", (content || "").length);
       return content || "";
     } catch (err) {
@@ -220,6 +257,8 @@ export async function generateContentSuggestion(
       closeLists();
       content = `<h2>${sectionTitle}</h2>\n` + htmlLines.join('\n');
     }
+    // Add proper spacing to generated content
+    content = addProperSpacing(content);
     return content;
   } catch (err) {
     console.error("[AI:integrations] Error:", err);
