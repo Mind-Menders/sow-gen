@@ -40,20 +40,18 @@ function addProperSpacing(html: string): string {
   html = html.replace(/(<\/h2>)/gi, '$1<br>');
   html = html.replace(/(<\/h3>)/gi, '$1<br>');
   html = html.replace(/(<\/h4>)/gi, '$1<br>');
-  
-  // Add spacing before headings (except first one)
-  html = html.replace(/(<h2(?:\s[^>]*)?>)/gi, '<br><br>$1');
-  html = html.replace(/(<h3(?:\s[^>]*)?>)/gi, '<br><br>$1');
-  html = html.replace(/(<h4(?:\s[^>]*)?>)/gi, '<br>$1');
-  
+
   // Remove double spacing at the beginning
   html = html.replace(/^(<br>\s*)+/i, '');
-  
+
   // Add spacing between paragraphs and lists
   html = html.replace(/(<\/p>)(\s*)(<p>)/gi, '$1<br>$3');
-  html = html.replace(/(<\/ul>|<\/ol>)(\s*)(<p>)/gi, '$1<br><br>$3');
+  html = html.replace(/(<\/ul>|<\/ol>)(\s*)(<p>)/gi, '$1<br>$3');
   html = html.replace(/(<\/p>)(\s*)(<ul>|<ol>)/gi, '$1<br>$3');
-  
+
+  // Remove repeated empty paragraphs and <p><br></p>
+  html = html.replace(/(<p>(\s|<br\s*\/?>)*<\/p>)+/gi, '');
+
   return html;
 }
 
@@ -97,12 +95,11 @@ Output format requirements:
 - Start with a top-level heading for the section title using <h2>${sectionTitle}</h2>
 - Use <h3> and <h4> for subheadings
 - IMPORTANT: Add line breaks between sections - use <br> tags after headings and between major content blocks
-- Add empty <p></p> tags between major sections to create visual spacing
 - Use semantic elements (p, ul/ol, table, thead, tbody, tr, th, td)
 - Keep links absolute text only (no external JS or inline scripts/styles)
 - Ensure proper spacing: headings should be followed by line breaks before content
 
-Return ONLY the HTML fragment with proper spacing.`;
+Return ONLY the HTML fragment with proper spacing. Do NOT use empty paragraphs for spacing.`;
 }
 
 /**

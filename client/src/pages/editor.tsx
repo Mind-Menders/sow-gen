@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import ReactQuill, { Quill } from "react-quill";
@@ -96,6 +96,7 @@ const quillFormats = [
 ];
 
 export default function Editor() {
+  const quillRef = useRef<any>(null);
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -470,8 +471,9 @@ export default function Editor() {
   });
 
   const handleApplySuggestion = () => {
-    if (aiSuggestion) {
-      setEditContent(aiSuggestion);
+    if (aiSuggestion && quillRef.current) {
+      const quill = quillRef.current.getEditor();
+      quill.clipboard.dangerouslyPasteHTML(aiSuggestion);
       setAiSuggestion("");
       setHasUnsavedChanges(true);
     }
@@ -1204,6 +1206,7 @@ export default function Editor() {
                   <CardContent className="space-y-4">
                     <div className="bg-white rounded border" data-testid="textarea-content">
                       <ReactQuill
+                        ref={quillRef}
                         theme="snow"
                         value={editContent}
                         onChange={handleContentChange}
@@ -1275,13 +1278,16 @@ export default function Editor() {
                           variant="default"
                           className="flex-1 h-10 rounded-lg transition-all hover:shadow-md"
                           onClick={() => {
-                            setEditContent(aiSuggestion);
-                            setHasUnsavedChanges(true);
-                            setAiSuggestion("");
-                            toast({
-                              title: "Content Inserted",
-                              description: "AI suggestion has been inserted into the editor.",
-                            });
+                            if (aiSuggestion && quillRef.current) {
+                              const quill = quillRef.current.getEditor();
+                              quill.clipboard.dangerouslyPasteHTML(aiSuggestion);
+                              setHasUnsavedChanges(true);
+                              setAiSuggestion("");
+                              toast({
+                                title: "Content Inserted",
+                                description: "AI suggestion has been inserted into the editor.",
+                              });
+                            }
                           }}
                           data-testid="button-insert-ai"
                         >
