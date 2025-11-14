@@ -58,6 +58,28 @@ const steps = [
 ];
 
 export default function CreateSOW() {
+  // SOW reference query (free-text)
+  const [sowReference, setSowReference] = useState("");
+  // Reference document upload state
+  const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
+  const [selectedReferences, setSelectedReferences] = useState<string[]>([]);
+
+  // Handle file upload
+  const handleReferenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setReferenceFiles((prev) => [...prev, ...files]);
+    }
+  };
+
+  // Handle reference selection
+  const toggleReferenceSelection = (name: string) => {
+    setSelectedReferences((prev) =>
+      prev.includes(name)
+        ? prev.filter((n) => n !== name)
+        : [...prev, name]
+    );
+  };
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -155,11 +177,12 @@ export default function CreateSOW() {
         budget: formData.budget || undefined,
         currency: formData.currency || "USD",
         requirements: formData.requirements,
-        // If a workflow is selected, set to pending_review so approvals can be created
         status: formData.workflowId ? "pending_review" : "draft",
         workflowId: formData.workflowId || undefined,
         createdBy: user?.id || undefined,
         sections: sectionsData,
+  referenceDocumentIds: selectedReferences.join(","),
+        sowReference,
       });
     },
     onSuccess: async (data: any) => {
@@ -300,6 +323,67 @@ export default function CreateSOW() {
 
             {currentStep === 2 && (
               <div className="space-y-6">
+                {/* Reference Document Upload Section (now inside Project Details step) */}
+                <Card className="mb-8">
+                  <CardHeader>
+                    <CardTitle>Reference Documents</CardTitle>
+                    <CardDescription>
+                      Upload PDF, PPT, DOCX, or TXT files to use as context for SOW generation. Select which files to include.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-4 mb-4">
+                      <Input
+                        type="file"
+                        multiple
+                        accept=".pdf,.ppt,.pptx,.doc,.docx,.txt"
+                        onChange={handleReferenceUpload}
+                        className="max-w-xs"
+                        data-testid="input-reference-upload"
+                      />
+                    </div>
+                    {referenceFiles.length > 0 && (
+                      <div className="space-y-2">
+                        <Label className="font-semibold">Uploaded Files</Label>
+                        <ul className="space-y-1">
+                          {referenceFiles.map((file) => (
+                            <li key={file.name} className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={selectedReferences.includes(file.name)}
+                                onChange={() => toggleReferenceSelection(file.name)}
+                                className="accent-primary"
+                                id={`ref-select-${file.name}`}
+                              />
+                              <Label htmlFor={`ref-select-${file.name}`}>{file.name}</Label>
+                              <Badge variant="secondary" className="ml-2">
+                                {file.type.split("/")[1]?.toUpperCase() || "FILE"}
+                              </Badge>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                {/* SOW Reference Query (now inside Project Details step) */}
+                <Card className="mb-8">
+                  <CardHeader>
+                    <CardTitle>SOW Reference (optional)</CardTitle>
+                    <CardDescription>
+                      Add a free-text reference or query to further guide context retrieval from your reference documents.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Textarea
+                      value={sowReference}
+                      onChange={e => setSowReference(e.target.value)}
+                      placeholder="E.g. focus on risk management and compliance sections"
+                      className="min-h-[60px]"
+                      data-testid="input-sow-reference"
+                    />
+                  </CardContent>
+                </Card>
                 <div className="space-y-2">
                   <Label htmlFor="title">SOW Title *</Label>
                   <Input

@@ -5,7 +5,7 @@ export interface IStorage {
   getAllSows(): Promise<Sow[]>;
   getSowById(id: string): Promise<Sow | undefined>;
   createSow(sow: InsertSow): Promise<Sow>;
-  updateSow(id: string, updates: Partial<InsertSow>): Promise<Sow | undefined>;
+  updateSow(id: string, updates: Partial<InsertSow>, opts?: { incrementVersion?: boolean }): Promise<Sow | undefined>;
   deleteSow(id: string): Promise<boolean>;
   
   getAllTemplates(): Promise<Template[]>;
@@ -187,6 +187,7 @@ export class MemStorage implements IStorage {
       sowNumber: generateSowNumber(),
       title: "Digital Transformation Initiative - Phase 1",
       vendorName: "TechCorp Solutions",
+      client: "Emirates",
       sponsor: "John Smith",
       sowType: "New Vendor (RFT)",
       // map legacy pending_approval -> pending_review
@@ -197,13 +198,17 @@ export class MemStorage implements IStorage {
       initiative: "",
       deliveryPortfolio: null,
       businessOwner: null,
-      startDate: null,
-      endDate: null,
+      startDate: "",
+      endDate: "",
       budget: null,
       currency: "USD",
       workflowId: null,
-      requirements: null,
+      requirements: "",
       createdBy: null,
+      lastEditedBy: null,
+      version: 1,
+      referenceDocumentIds: '',
+      sowReference: '',
     };
 
     const sow2: Sow = {
@@ -211,6 +216,7 @@ export class MemStorage implements IStorage {
       sowNumber: generateSowNumber(),
       title: "Mobile App Development - Customer Portal",
       vendorName: "AppBuilders Inc",
+      client: "Emirates",
       sponsor: "Emily Davis",
       sowType: "Existing Vendor Enhancement",
   // map approved -> ready_for_submission
@@ -221,13 +227,17 @@ export class MemStorage implements IStorage {
       initiative: "",
       deliveryPortfolio: null,
       businessOwner: null,
-      startDate: null,
-      endDate: null,
+      startDate: "",
+      endDate: "",
       budget: null,
       currency: "USD",
       workflowId: null,
-      requirements: null,
+      requirements: "",
       createdBy: null,
+      lastEditedBy: null,
+      version: 1,
+      referenceDocumentIds: '',
+      sowReference: '',
     };
 
     const sow3: Sow = {
@@ -235,6 +245,7 @@ export class MemStorage implements IStorage {
       sowNumber: generateSowNumber(),
       title: "Data Analytics Platform Implementation",
       vendorName: "DataWorks Consulting",
+      client: "Emirates",
       sponsor: "Robert Williams",
       sowType: "Flexi Sourcing - TNM",
       status: "draft",
@@ -244,13 +255,17 @@ export class MemStorage implements IStorage {
       initiative: "",
       deliveryPortfolio: null,
       businessOwner: null,
-      startDate: null,
-      endDate: null,
+      startDate: "",
+      endDate: "",
       budget: null,
       currency: "USD",
       workflowId: null,
-      requirements: null,
+      requirements: "",
       createdBy: null,
+      lastEditedBy: null,
+      version: 1,
+      referenceDocumentIds: '',
+      sowReference: '',
     };
 
     const sow4: Sow = {
@@ -258,6 +273,7 @@ export class MemStorage implements IStorage {
       sowNumber: generateSowNumber(),
       title: "Digital Transformation Project",
       vendorName: "Dnata",
+      client: "Emirates",
       sponsor: "Business",
       sowType: "New Vendor (RFT)",
       status: "draft",
@@ -267,13 +283,17 @@ export class MemStorage implements IStorage {
       initiative: "",
       deliveryPortfolio: null,
       businessOwner: null,
-      startDate: null,
-      endDate: null,
+      startDate: "",
+      endDate: "",
       budget: null,
       currency: "USD",
       workflowId: null,
-      requirements: null,
+      requirements: "",
       createdBy: null,
+      lastEditedBy: null,
+      version: 1,
+      referenceDocumentIds: '',
+      sowReference: '',
     };
 
     const sow5: Sow = {
@@ -281,6 +301,7 @@ export class MemStorage implements IStorage {
       sowNumber: generateSowNumber(),
       title: "FIS",
       vendorName: "Gtreasury",
+      client: "Emirates",
       sponsor: "Temi",
       sowType: "New Vendor (RFT)",
       status: "draft",
@@ -290,13 +311,17 @@ export class MemStorage implements IStorage {
       initiative: "",
       deliveryPortfolio: null,
       businessOwner: null,
-      startDate: null,
-      endDate: null,
+      startDate: "",
+      endDate: "",
       budget: null,
       currency: "USD",
       workflowId: null,
-      requirements: null,
+      requirements: "",
       createdBy: null,
+      lastEditedBy: null,
+      version: 1,
+      referenceDocumentIds: '',
+      sowReference: '',
     };
 
     const sow6: Sow = {
@@ -304,6 +329,7 @@ export class MemStorage implements IStorage {
       sowNumber: generateSowNumber(),
       title: "Digital Trans1",
       vendorName: "eVendor",
+      client: "Emirates",
       sponsor: "Mohin",
       sowType: "New Vendor (RFT)",
       status: "draft",
@@ -313,13 +339,17 @@ export class MemStorage implements IStorage {
       initiative: "",
       deliveryPortfolio: null,
       businessOwner: null,
-      startDate: null,
-      endDate: null,
+      startDate: "",
+      endDate: "",
       budget: null,
       currency: "USD",
       workflowId: null,
-      requirements: null,
+      requirements: "",
       createdBy: null,
+      lastEditedBy: null,
+      version: 1,
+      referenceDocumentIds: '',
+      sowReference: '',
     };
 
     this.sows.set(sow1.id, sow1);
@@ -352,26 +382,31 @@ export class MemStorage implements IStorage {
       initiative: insertSow.initiative || "",
       deliveryPortfolio: insertSow.deliveryPortfolio ?? null,
       vendorName: insertSow.vendorName || "",
+      client: insertSow.client || "Emirates",
       sponsor: insertSow.sponsor ?? null,
       businessOwner: insertSow.businessOwner ?? null,
-      startDate: insertSow.startDate ?? null,
-      endDate: insertSow.endDate ?? null,
+      startDate: insertSow.startDate ?? "",
+      endDate: insertSow.endDate ?? "",
       budget: insertSow.budget ?? null,
       currency: insertSow.currency || "USD",
       sowType: insertSow.sowType || "New Vendor (RFT)",
       status: insertSow.status || "draft",
       workflowId: insertSow.workflowId ?? null,
-      requirements: insertSow.requirements ?? null,
+      requirements: insertSow.requirements ?? "",
       createdBy: insertSow.createdBy ?? null,
+      lastEditedBy: null,
       createdAt: now,
       updatedAt: now,
+      version: 1,
       sections: insertSow.sections ?? JSON.stringify(defaultSections),
+      referenceDocumentIds: '',
+      sowReference: '',
     };
     this.sows.set(id, sow);
     return sow;
   }
 
-  async updateSow(id: string, updates: Partial<InsertSow>): Promise<Sow | undefined> {
+  async updateSow(id: string, updates: Partial<InsertSow>, _opts?: { incrementVersion?: boolean }): Promise<Sow | undefined> {
     const sow = this.sows.get(id);
     if (!sow) return undefined;
 

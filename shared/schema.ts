@@ -33,7 +33,7 @@ export const sows = pgTable("sows", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   sowNumber: text("sow_number").notNull(),
   title: text("title").notNull(),
-  initiative: text("initiative").notNull().default(""),
+  initiative: text("initiative").notNull().default("") ,
   deliveryPortfolio: text("delivery_portfolio"),
   vendorName: text("vendor_name").notNull(),
   client: text("client").notNull().default("Emirates"),
@@ -48,9 +48,13 @@ export const sows = pgTable("sows", {
   workflowId: varchar("workflow_id").references(() => workflows.id),
   requirements: text("requirements").notNull(),
   createdBy: varchar("created_by").references(() => users.id),
+  lastEditedBy: varchar("last_edited_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  version: integer("version").notNull().default(1),
   sections: text("sections").notNull().default("{}"),
+  referenceDocumentIds: text("reference_document_ids"), // Comma-separated IDs
+  sowReference: text("sow_reference"),
 });
 
 export const templates = pgTable("templates", {
@@ -152,6 +156,7 @@ export const insertSowAuditTrailSchema = createInsertSchema(sowAuditTrail).omit(
 
 export type InsertSow = z.infer<typeof insertSowSchema>;
 export type Sow = typeof sows.$inferSelect;
+// Sow type now includes referenceDocumentIds and sowReference
 
 export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
 export type Template = typeof templates.$inferSelect;

@@ -85,8 +85,12 @@ interface MongoSow {
   workflowId?: string | null;
   requirements?: string | null;
   createdBy?: string | null;
+  lastEditedBy?: string | null;
   createdAt: Date;
   updatedAt: Date;
+  version?: number;
+  referenceDocumentIds?: string;
+  sowReference?: string;
 }
 
 interface MongoTemplate {
@@ -388,8 +392,12 @@ export class MongoStorage implements IStorage {
       workflowId: mongoSow.workflowId ?? null,
       requirements: mongoSow.requirements ?? "",
       createdBy: mongoSow.createdBy ?? null,
+      lastEditedBy: mongoSow.lastEditedBy ?? null,
       createdAt: mongoSow.createdAt,
       updatedAt: mongoSow.updatedAt,
+      version: typeof mongoSow.version === 'number' ? mongoSow.version : 1,
+      referenceDocumentIds: mongoSow.referenceDocumentIds ?? '',
+      sowReference: mongoSow.sowReference ?? '',
     };
   }
 
@@ -447,11 +455,25 @@ export class MongoStorage implements IStorage {
     return this.mongoSowToSow(mongoSow);
   }
 
-  async updateSow(id: string, updates: Partial<InsertSow>): Promise<Sow | undefined> {
+  async updateSow(id: string, updates: Partial<InsertSow>, opts?: { incrementVersion?: boolean }): Promise<Sow | undefined> {
     await this.ensureConnected();
+    const sowDoc = await this.sowsCollection!.findOne({ _id: new ObjectId(id) });
+    // Build $set object without overwriting fields unintentionally
+    const safeUpdates: any = { updatedAt: new Date() };
+    for (const [key, value] of Object.entries(updates as Record<string, any>)) {
+      // Only set fields that are explicitly provided (not undefined)
+      if (value !== undefined) {
+        safeUpdates[key] = value;
+      }
+    }
+    // Only increment version when explicitly requested
+    if (opts?.incrementVersion) {
+      const currentVersion = sowDoc && typeof (sowDoc as any).version === 'number' ? (sowDoc as any).version : 1;
+      safeUpdates.version = currentVersion + 1;
+    }
     const result = await this.sowsCollection!.findOneAndUpdate(
       { _id: new ObjectId(id) },
-      { $set: { ...updates, updatedAt: new Date() } },
+      { $set: safeUpdates },
       { returnDocument: "after" }
     );
     return result ? this.mongoSowToSow(result) : undefined;
@@ -744,6 +766,7 @@ export class MongoStorage implements IStorage {
   // Audit Trail methods
   async createSowAuditEntry(entry: InsertSowAuditTrail): Promise<SowAuditTrail> {
     await this.ensureConnected();
+    console.log('[MongoDB] Creating audit entry:', entry);
     const mongoEntry = {
       _id: new ObjectId(),
       sowId: entry.sowId,
@@ -757,7 +780,8 @@ export class MongoStorage implements IStorage {
       metadata: entry.metadata || null,
       createdAt: new Date(),
     };
-    await this.auditTrailCollection!.insertOne(mongoEntry);
+    const result = await this.auditTrailCollection!.insertOne(mongoEntry);
+    console.log('[MongoDB] Audit entry inserted with ID:', result.insertedId.toHexString());
     return {
       id: mongoEntry._id.toHexString(),
       sowId: mongoEntry.sowId,
@@ -775,7 +799,9 @@ export class MongoStorage implements IStorage {
 
   async getSowAuditTrail(sowId: string): Promise<SowAuditTrail[]> {
     await this.ensureConnected();
+    console.log('[MongoDB] Fetching audit trail for SOW:', sowId);
     const mongoEntries = await this.auditTrailCollection!.find({ sowId }).sort({ createdAt: -1 }).toArray();
+    console.log('[MongoDB] Found', mongoEntries.length, 'entries in database');
     return mongoEntries.map((entry: any) => ({
       id: entry._id.toHexString(),
       sowId: entry.sowId,

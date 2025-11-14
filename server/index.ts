@@ -2,6 +2,7 @@ import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { registerRoutes } from "./routes";
+import { connectToMongo } from "./mongodb";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
@@ -74,6 +75,12 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Ensure MongoDB is connected for logging and related tasks
+  try {
+    await connectToMongo();
+  } catch (e) {
+    console.error("Failed to connect to MongoDB:", e);
+  }
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

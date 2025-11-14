@@ -73,7 +73,7 @@ export default function Dashboard() {
         sow.title.toLowerCase().includes(query) ||
         sow.sowNumber.toLowerCase().includes(query) ||
         sow.vendorName.toLowerCase().includes(query) ||
-        sow.sponsor.toLowerCase().includes(query)
+        (sow.sponsor && sow.sponsor.toLowerCase().includes(query))
       );
     }
     return true;
@@ -240,6 +240,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredSows.map((sow) => {
               const initiator = users.find((u) => u.id === sow.createdBy);
+              const lastEditor = users.find((u) => u.id === sow.lastEditedBy);
               const displayStatus = sow.displayStatus;
               
               return (
@@ -249,21 +250,47 @@ export default function Dashboard() {
                   data-testid={`card-sow-${sow.id}`}
                 >
                   <CardHeader className="space-y-3 pr-16">
-                    {displayStatus && defaultStatusConfig[displayStatus] ? (
-                      <Badge
-                        variant={defaultStatusConfig[displayStatus].variant}
-                        className={
-                          `w-fit uppercase text-xs font-semibold` +
-                          (displayStatus === "ready_for_submission" ? " bg-green-600 text-white" : "")
-                        }
-                      >
-                        {defaultStatusConfig[displayStatus].label}
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="w-fit uppercase text-xs font-semibold">
-                        Unknown Status
-                      </Badge>
-                    )}
+                    <div className="flex items-start justify-between gap-2">
+                      {displayStatus && defaultStatusConfig[displayStatus] ? (
+                        <Badge
+                          variant={defaultStatusConfig[displayStatus].variant}
+                          className={
+                            `w-fit uppercase text-xs font-semibold` +
+                            (displayStatus === "ready_for_submission" ? " bg-green-600 text-white" : "")
+                          }
+                        >
+                          {defaultStatusConfig[displayStatus].label}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="w-fit uppercase text-xs font-semibold">
+                          Unknown Status
+                        </Badge>
+                      )}
+                      
+                      {/* Version Stamp Badge */}
+                      <div className="relative">
+                        <div 
+                          className="px-3 py-2 bg-gradient-to-br from-amber-500/20 to-orange-600/30 border-2 border-amber-600/40 rounded-md shadow-md transform rotate-2 hover:rotate-0 transition-transform duration-200"
+                          style={{
+                            boxShadow: "0 2px 4px rgba(217, 119, 6, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3)"
+                          }}
+                        >
+                          <div className="text-center">
+                            <div className="text-[10px] font-bold text-amber-900/70 uppercase tracking-wide leading-none">
+                              Version
+                            </div>
+                            <div className="text-xl font-black text-amber-900 leading-none mt-0.5">
+                              {sow.version ?? 1}
+                            </div>
+                            {lastEditor && (
+                              <div className="text-[9px] text-amber-900/60 leading-tight mt-0.5 max-w-[80px] truncate">
+                                by {lastEditor.firstName || lastEditor.name}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                     <h3 className="text-lg font-semibold text-foreground line-clamp-2" data-testid={`text-sow-title-${sow.id}`}>
                       {sow.title}
                     </h3>

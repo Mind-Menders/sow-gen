@@ -246,6 +246,7 @@ export default function Editor() {
         content: editContent,
       };
       setSections(updatedSections);
+      // Autosave: do NOT pass manual flag - no version increment
       return apiRequest("PATCH", `/api/sows/${sowId}`, {
         sections: JSON.stringify(updatedSections),
       });
@@ -302,7 +303,8 @@ export default function Editor() {
         };
       }
       setSections(updatedSections);
-      return apiRequest("PATCH", `/api/sows/${sowId}`, {
+      // Manual save: pass manual flag to increment version and create audit entry
+      return apiRequest("PATCH", `/api/sows/${sowId}?manual=1`, {
         sections: JSON.stringify(updatedSections),
       });
     },
@@ -310,6 +312,7 @@ export default function Editor() {
       setHasUnsavedChanges(false);
       queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}/audit`] });
       toast({
         title: "Saved",
         description: "Your changes have been saved successfully.",
@@ -962,6 +965,39 @@ export default function Editor() {
                   <p className="text-lg font-bold font-mono text-foreground" data-testid="text-sow-number">
                     #{sow.sowNumber}
                   </p>
+                  <div className="h-5 w-px bg-border" />
+                  
+                  {/* Version Stamp Badge - Larger in Editor */}
+                  <div className="relative">
+                    <div 
+                      className="px-4 py-2.5 bg-gradient-to-br from-amber-500/20 to-orange-600/30 border-2 border-amber-600/40 rounded-lg shadow-lg transform rotate-1 hover:rotate-0 transition-transform duration-200"
+                      style={{
+                        boxShadow: "0 3px 6px rgba(217, 119, 6, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3)"
+                      }}
+                      data-testid="text-sow-version"
+                    >
+                      <div className="text-center">
+                        <div className="text-[11px] font-bold text-amber-900/70 uppercase tracking-wide leading-none">
+                          Version
+                        </div>
+                        <div className="text-2xl font-black text-amber-900 leading-none mt-1">
+                          {sow.version ?? 1}
+                        </div>
+                        {(() => {
+                          const lastEditor = users?.find((u: any) => u.id === sow.lastEditedBy);
+                          if (lastEditor) {
+                            return (
+                              <div className="text-[10px] text-amber-900/60 leading-tight mt-1">
+                                Last edited by<br/>
+                                <span className="font-semibold">{lastEditor.firstName || lastEditor.name}</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <h1 className="text-2xl font-bold text-foreground mb-3" data-testid="sow-title">
                   {sow.title}

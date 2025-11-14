@@ -197,10 +197,11 @@ export async function generatePDF(sow: Sow, sections: SowSections, options: Expo
     });
 
     // Title and metadata
-  doc.font('Helvetica-Bold').fontSize(24).fillColor("#000").text(sow.title, { align: "center", underline: false });
+    doc.font('Helvetica-Bold').fontSize(24).fillColor("#000").text(sow.title, { align: "center", underline: false });
     doc.moveDown();
     doc.fontSize(10).fillColor("#666");
     doc.text(`SOW Number: ${sow.sowNumber}`, { align: "center" });
+    doc.text(`Version: ${sow.version ?? 1}`, { align: "center" });
     doc.text(`Status: ${sow.status}`, { align: "center" });
     doc.text(`Vendor: ${sow.vendorName}`, { align: "center" });
     doc.moveDown(2);

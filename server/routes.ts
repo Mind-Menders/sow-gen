@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import multer from 'multer';
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, type IStorage } from "./storage";
@@ -52,6 +52,58 @@ async function initializeStorage() {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Multer for file uploads
+  const upload = multer({ dest: 'uploads/' });
+
+  // Reference document upload endpoint
+  app.post("/api/reference/upload", upload.array("files"), async (req, res) => {
+    try {
+  const files = (req as any).files;
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+      // Extract text from each file
+      const extractedTexts = [];
+      for (const file of files) {
+        let text = "";
+        if (file.mimetype === "application/pdf") {
+          // TODO: Use pdf-parse or similar to extract text
+          text = "[PDF text extraction not yet implemented]";
+        } else if (file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || file.mimetype === "application/msword") {
+          // TODO: Use mammoth or similar to extract text from DOCX
+          text = "[DOCX text extraction not yet implemented]";
+        } else if (file.mimetype === "text/plain") {
+          // Read plain text
+          const fs = require('fs');
+          text = fs.readFileSync(file.path, 'utf8');
+        } else if (file.mimetype === "application/vnd.ms-powerpoint" || file.mimetype === "application/vnd.openxmlformats-officedocument.presentationml.presentation") {
+          // TODO: Use pptx2json or similar to extract text from PPT/PPTX
+          text = "[PPT text extraction not yet implemented]";
+        } else {
+          text = "[Unsupported file type]";
+        }
+        extractedTexts.push({ name: file.originalname, type: file.mimetype, text });
+      }
+      // TODO: Store files and extracted text, integrate with vector-storage
+      res.json({ success: true, files: extractedTexts });
+    } catch (error) {
+      console.error("Reference upload error:", error);
+      res.status(500).json({ error: "Failed to upload reference document" });
+    }
+  });
+  // Reference document upload endpoint
+  app.post("/api/reference/upload", async (req, res) => {
+    try {
+      // TODO: Accept multipart/form-data, parse files
+      // TODO: Extract text from PDF, PPT, DOCX, TXT
+      // TODO: Store files and extracted text
+      // TODO: Integrate with vector-storage for embedding
+      res.json({ success: true, message: "Reference upload endpoint scaffolded." });
+    } catch (error) {
+      console.error("Reference upload error:", error);
+      res.status(500).json({ error: "Failed to upload reference document" });
+    }
+  });
   // AI: Generate all sections for a SOW (bulk)
   app.post("/api/sows/:id/ai-generate-all", async (req: import("express").Request, res: import("express").Response) => {
     try {
@@ -196,9 +248,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Allow any authenticated user to edit
-      const sow = await dbStorage.updateSow(req.params.id, req.body);
+      const isManualSave = req.query.manual === '1' || req.query.manual === 'true';
+      
+      // On manual save, update lastEditedBy
+      const updatePayload = { ...req.body };
+      if (isManualSave && req.session.userId) {
+        updatePayload.lastEditedBy = req.session.userId;
+      }
+      
+      const sow = await dbStorage.updateSow(req.params.id, updatePayload, { incrementVersion: !!isManualSave });
       if (!sow) {
         return res.status(404).json({ error: "SOW not found" });
+      }
+
+      // Audit log only on manual save (when version increment requested)
+      if (isManualSave && req.session.userId) {
+        try {
+          console.log('[Audit] Creating version increment audit entry for SOW:', sow.id, 'Version:', sow.version);
+          const user = await dbStorage.getUserById(req.session.userId);
+          const auditEntry = await dbStorage.createSowAuditEntry({
+            sowId: sow.id,
+            action: 'version_increment',
+            performedBy: req.session.userId,
+            previousStatus: null,
+            newStatus: null,
+            previousReviewer: null,
+            newReviewer: null,
+            remarks: `SOW version incremented to ${sow.version} by ${user?.firstName || user?.name || 'Unknown User'}`,
+            metadata: JSON.stringify({ version: sow.version, byUser: user?.email || user?.name || req.session.userId }),
+          });
+          console.log('[Audit] Version audit entry created:', auditEntry.id);
+        } catch (e) {
+          console.error('[Audit] Failed to write version audit log:', e instanceof Error ? e.message : String(e), e);
+        }
       }
 
       // If workflowId changed or status is pending_approval, sync approval records for all reviewers in all stages
@@ -461,7 +543,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ai/generate-content", async (req, res) => {
     try {
       const { sectionTitle, sectionContent, sowId } = req.body;
-      
       if (!sectionTitle || !sowId) {
         return res.status(400).json({ error: "Missing required fields" });
       }
@@ -471,9 +552,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "SOW not found" });
       }
 
+      // Reference context retrieval (ChromaDB)
+      let referenceContext = sectionContent || "";
+  let docIds: string[] = [];
+      if (typeof sow.referenceDocumentIds === "string" && sow.referenceDocumentIds.length > 0) {
+        docIds = sow.referenceDocumentIds.split(",").map(id => id.trim()).filter(Boolean);
+      }
+      if (docIds.length > 0) {
+        const query = sow.sowReference || sectionTitle;
+  let allChunks: any[] = [];
+        const { retrieveRelevantChunks } = await import("./vector-storage");
+        for (const docId of docIds) {
+          const chunks = await retrieveRelevantChunks(query + " " + docId, 3, docId);
+          allChunks = allChunks.concat(chunks);
+        }
+        if (allChunks.length > 0) {
+          referenceContext += `\nReference Context:\n${allChunks.join("\n\n")}`;
+        }
+      }
+
       const suggestion = await generateContentSuggestion(
         sectionTitle,
-        sectionContent || "",
+        referenceContext,
         {
           title: sow.title,
           vendorName: sow.vendorName,
@@ -754,9 +854,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get audit trail for a SOW
   app.get("/api/sows/:id/audit", async (req, res) => {
     try {
+      console.log('[Audit] Fetching audit trail for SOW:', req.params.id);
       const auditTrail = await dbStorage.getSowAuditTrail(req.params.id);
+      console.log('[Audit] Found', auditTrail.length, 'audit entries');
+      console.log('[Audit] Entries:', auditTrail.map(a => ({ action: a.action, remarks: a.remarks, createdAt: a.createdAt })));
       res.json(auditTrail);
     } catch (error) {
+      console.error('[Audit] Failed to fetch audit trail:', error);
       res.status(500).json({ error: "Failed to fetch audit trail" });
     }
   });
