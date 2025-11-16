@@ -1,0 +1,13 @@
+Title: Cloud Migration 2025
+Vendor: Acme Systems
+Client: Emirates
+Initiative: Digital Transformation
+Sponsor: Jane Doe
+Business Owner: John Smith
+Start Date: 2025-01-15
+End Date: 2025-06-30
+Budget: 1250000 USD
+Requirements:
+- Migrate 50 applications to cloud
+- Ensure zero data loss
+- Compliance with ISO27001

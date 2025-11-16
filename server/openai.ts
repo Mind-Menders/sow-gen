@@ -577,6 +577,98 @@ Example format:
   }
 }
 
+// Types for extracted SOW fields
+export type ExtractedSowFields = Partial<{
+  sowType: string;
+  title: string;
+  initiative: string;
+  deliveryPortfolio: string;
+  sponsor: string;
+  businessOwner: string;
+  vendorName: string;
+  client: string;
+  startDate: string; // ISO date yyyy-mm-dd
+  endDate: string;   // ISO date yyyy-mm-dd
+  budget: string;    // numeric as string
+  currency: string;  // e.g., USD, AED
+  requirements: string;
+}>;
+
+/**
+ * Extract high-level SOW details from arbitrary reference document text.
+ * Returns a partial fields object. Missing fields will be omitted.
+ */
+export async function extractSowDetailsFromText(
+  combinedText: string,
+  options: { sowTypeHint?: string } = {}
+): Promise<ExtractedSowFields> {
+  const systemPrompt = "You are an expert information extraction engine for enterprise SOW documents. Always return STRICT JSON with only the requested keys.";
+  const userPrompt = `Extract SOW metadata fields from the following reference text. If a field is not present, omit it.\n\nReturn ONLY a valid JSON object with these keys at most: 
+{
+  "sowType": string,
+  "title": string,
+  "initiative": string,
+  "deliveryPortfolio": string,
+  "sponsor": string,
+  "businessOwner": string,
+  "vendorName": string,
+  "client": string,
+  "startDate": "YYYY-MM-DD",
+  "endDate": "YYYY-MM-DD",
+  "budget": "number-as-string",
+  "currency": string,
+  "requirements": string
+}
+
+Guidelines:
+- Use ISO dates (YYYY-MM-DD) when dates are available; otherwise omit
+- currency should be standard 3-letter code when possible (e.g., USD, AED)
+- budget should be numeric string with no commas (e.g., "1200000")
+- requirements: consolidate key requirement bullets into a compact paragraph
+- If a hint for sowType is provided, prefer that if not explicitly present
+
+Hint sowType: ${options.sowTypeHint || '(none)'}
+
+Reference Text (may be noisy, multi-document):\n\n${combinedText.substring(0, 12000)}\n\nReturn ONLY JSON with no code fences.`;
+
+  try {
+    const raw = await aiComplete(systemPrompt, userPrompt, { maxTokens: 1024 });
+    let cleaned = raw.trim();
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    }
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) cleaned = match[0];
+    const parsed = JSON.parse(cleaned);
+
+    // Ensure types are strings and basic normalization
+    const out: ExtractedSowFields = {};
+    const copy = (k: keyof ExtractedSowFields) => {
+      if (parsed[k] != null && String(parsed[k]).trim() !== '') out[k] = String(parsed[k]).trim();
+    };
+    copy('sowType');
+    copy('title');
+    copy('initiative');
+    copy('deliveryPortfolio');
+    copy('sponsor');
+    copy('businessOwner');
+    copy('vendorName');
+    copy('client');
+    copy('startDate');
+    copy('endDate');
+    copy('budget');
+    copy('currency');
+    copy('requirements');
+
+    // Apply sowType hint if missing
+    if (!out.sowType && options.sowTypeHint) out.sowType = options.sowTypeHint;
+    return out;
+  } catch (err) {
+    console.error('[AI] Failed to extract SOW fields:', err);
+    return {};
+  }
+}
+
 /**
  * Fallback section suggestions if AI parsing fails.
  */

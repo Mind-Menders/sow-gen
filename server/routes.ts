@@ -6,6 +6,7 @@ import { insertSowSchema, insertTemplateSchema, insertUserSchema, insertWorkflow
 import { generateContentSuggestion, analyzeSectionQuality, getInlineSuggestion, chatWithAI, suggestSections } from "./openai";
 import { generatePDF, generateWord } from "./export";
 import { createAuthRouter } from "./auth";
+import { emailService } from "./email-service";
 
 let dbStorage: IStorage = storage;
 
@@ -54,6 +55,7 @@ async function initializeStorage() {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Multer for file uploads
   const upload = multer({ dest: 'uploads/' });
+  const uploadMemory = multer({ storage: multer.memoryStorage() });
 
   // Reference document upload endpoint
   app.post("/api/reference/upload", upload.array("files"), async (req, res) => {
@@ -102,6 +104,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Reference upload error:", error);
       res.status(500).json({ error: "Failed to upload reference document" });
+    }
+  });
+
+  // Extract SOW details from uploaded documents (AI-assisted)
+  app.post("/api/sows/extract-details", uploadMemory.array("files"), async (req, res) => {
+    try {
+      const files = (req as any).files as Array<{ originalname: string; mimetype: string; buffer: Buffer }>;
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+
+      const { sowTypeHint } = (req.body || {}) as { sowTypeHint?: string };
+
+      // Lazy import parsers
+  const pdfParseMod: any = await import('pdf-parse');
+  const pdfParse = (pdfParseMod && (pdfParseMod.default || (pdfParseMod as any))) as (buf: Buffer) => Promise<{ text: string }>;
+      const mammoth = await import('mammoth');
+      const { storeDocumentVectors } = await import('./vector-storage');
+      const { extractSowDetailsFromText } = await import('./openai');
+
+      // Extract text per file and store vectors using file name as documentId
+      const docIds: string[] = [];
+      const texts: string[] = [];
+      for (const file of files) {
+        let text = '';
+        const mime = file.mimetype;
+        try {
+          if (mime === 'application/pdf') {
+            const data = await pdfParse(file.buffer);
+            text = data.text || '';
+          } else if (
+            mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+            mime === 'application/msword'
+          ) {
+            const result = await mammoth.extractRawText({ buffer: file.buffer });
+            text = result.value || '';
+          } else if (mime === 'text/plain') {
+            text = file.buffer.toString('utf8');
+          } else if (
+            mime === 'application/vnd.ms-powerpoint' ||
+            mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+          ) {
+            // PPT/PPTX not fully supported; basic fallback to binary-to-utf8 which may be noisy
+            text = file.buffer.toString('utf8');
+          } else {
+            // Unsupported -> skip with note
+            text = '';
+          }
+        } catch (e) {
+          console.warn('[Extract] Failed to parse file:', file.originalname, e);
+        }
+
+        const documentId = file.originalname; // use original name as id (stable in current flow)
+        if (text && text.trim().length > 0) {
+          try {
+            await storeDocumentVectors(documentId, text);
+          } catch (e) {
+            console.warn('[Extract] Failed to store vectors for', documentId, e);
+          }
+          texts.push(text);
+          docIds.push(documentId);
+        }
+      }
+
+      const combinedText = texts.join('\n\n---\n\n');
+      let extracted: any = {};
+      if (combinedText.trim().length > 0) {
+        extracted = await extractSowDetailsFromText(combinedText, { sowTypeHint });
+      }
+
+      return res.json({ success: true, extractedFields: extracted, documentIds: docIds });
+    } catch (error) {
+      console.error('[Extract] Error extracting details:', error);
+      res.status(500).json({ error: 'Failed to extract details from documents' });
     }
   });
   // AI: Generate all sections for a SOW (bulk)
@@ -278,6 +354,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
             metadata: JSON.stringify({ version: sow.version, byUser: user?.email || user?.name || req.session.userId }),
           });
           console.log('[Audit] Version audit entry created:', auditEntry.id);
+
+          // Send version update email notifications
+          if (emailService.isEnabled()) {
+            try {
+              const allUsers = await dbStorage.getAllUsers();
+              const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+              const actionUrl = `${baseUrl}/editor/${sow.id}`;
+              
+              // Notify SOW creator if different from current editor
+              const sowCreator = sow.createdBy ? await dbStorage.getUserById(sow.createdBy) : null;
+              if (sowCreator?.email && sowCreator.id !== req.session.userId) {
+                await emailService.notifyVersionUpdate({
+                  recipientEmail: sowCreator.email,
+                  recipientName: sowCreator.firstName || sowCreator.name || 'User',
+                  sowNumber: sow.sowNumber,
+                  sowTitle: sow.title,
+                  actorName: user?.firstName || user?.name || 'User',
+                  version: sow.version,
+                  actionUrl,
+                });
+              }
+
+              // Notify all reviewers involved with this SOW
+              const allApprovals = await dbStorage.getSowApprovalsBySowId(sow.id);
+              const notifiedReviewers = new Set<string>();
+              for (const appr of allApprovals) {
+                if (!appr.reviewerId || notifiedReviewers.has(appr.reviewerId)) continue;
+                
+                const reviewer = allUsers.find(u => u.id === appr.reviewerId);
+                if (reviewer?.email && reviewer.id !== req.session.userId) {
+                  await emailService.notifyVersionUpdate({
+                    recipientEmail: reviewer.email,
+                    recipientName: reviewer.firstName || reviewer.name || 'User',
+                    sowNumber: sow.sowNumber,
+                    sowTitle: sow.title,
+                    actorName: user?.firstName || user?.name || 'User',
+                    version: sow.version,
+                    actionUrl,
+                  });
+                  notifiedReviewers.add(appr.reviewerId);
+                }
+              }
+            } catch (emailErr) {
+              console.error('[Email] Failed to send version update notification:', emailErr);
+            }
+          }
         } catch (e) {
           console.error('[Audit] Failed to write version audit log:', e instanceof Error ? e.message : String(e), e);
         }
@@ -845,6 +967,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (e) {
         console.warn('Failed to transition SOW status after approval update', e);
       }
+
+      // Send email notifications
+      try {
+        if (emailService.isEnabled() && approval.reviewerId) {
+          const sow = await dbStorage.getSowById(approval.sowId);
+          const reviewer = await dbStorage.getUserById(approval.reviewerId);
+          const sowCreator = sow?.createdBy ? await dbStorage.getUserById(sow.createdBy) : null;
+          const allUsers = await dbStorage.getAllUsers();
+
+          if (sow && reviewer) {
+            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+            const actionUrl = `${baseUrl}/editor/${sow.id}`;
+
+            // Notify SOW creator about approval/rejection
+            if (sowCreator?.email) {
+              if (status === 'approved') {
+                await emailService.notifyApproval({
+                  recipientEmail: sowCreator.email,
+                  recipientName: sowCreator.firstName || sowCreator.name || 'User',
+                  sowNumber: sow.sowNumber,
+                  sowTitle: sow.title,
+                  actorName: reviewer.firstName || reviewer.name || 'Reviewer',
+                  version: sow.version,
+                  comment: comments,
+                  actionUrl,
+                });
+              } else if (status === 'rejected') {
+                await emailService.notifyRejection({
+                  recipientEmail: sowCreator.email,
+                  recipientName: sowCreator.firstName || sowCreator.name || 'User',
+                  sowNumber: sow.sowNumber,
+                  sowTitle: sow.title,
+                  actorName: reviewer.firstName || reviewer.name || 'Reviewer',
+                  version: sow.version,
+                  reason: comments,
+                  actionUrl,
+                });
+              }
+            }
+
+            // If there are comments, notify relevant stakeholders
+            if (comments && comments.trim()) {
+              // Notify all approvers and the SOW creator
+              const notifyEmails = new Set<string>();
+              if (sowCreator?.email) notifyEmails.add(sowCreator.email);
+              
+              // Get all reviewers for this SOW
+              const allApprovals = await dbStorage.getSowApprovalsBySowId(sow.id);
+              for (const appr of allApprovals) {
+                const rev = allUsers.find(u => u.id === appr.reviewerId);
+                if (rev?.email && rev.email !== reviewer.email) {
+                  notifyEmails.add(rev.email);
+                }
+              }
+
+              // Send comment notifications
+              Array.from(notifyEmails).forEach(async (email) => {
+                const user = allUsers.find(u => u.email === email);
+                if (user) {
+                  await emailService.notifyComment({
+                    recipientEmail: email,
+                    recipientName: user.firstName || user.name || 'User',
+                    sowNumber: sow.sowNumber,
+                    sowTitle: sow.title,
+                    actorName: reviewer.firstName || reviewer.name || 'Reviewer',
+                    comment: comments,
+                    actionUrl,
+                  });
+                }
+              });
+            }
+          }
+        }
+      } catch (emailErr) {
+        console.error('[Email] Failed to send notification:', emailErr);
+        // Don't fail the request if email fails
+      }
+
       res.json(approval);
     } catch (error) {
       res.status(500).json({ error: "Failed to update approval" });

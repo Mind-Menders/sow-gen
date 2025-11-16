@@ -52,9 +52,10 @@ const sowTypeOptions = [
 
 const steps = [
   { id: 1, title: "SOW Type", subtitle: "Select SOW category" },
-  { id: 2, title: "Project Details", subtitle: "Basic information" },
-  { id: 3, title: "Template", subtitle: "Choose starting point" },
-  { id: 4, title: "Workflow & Reviewers", subtitle: "Setup approvals" },
+  { id: 2, title: "Documents", subtitle: "Upload reference files" },
+  { id: 3, title: "Project Details", subtitle: "Basic information" },
+  { id: 4, title: "Template", subtitle: "Choose starting point" },
+  { id: 5, title: "Workflow & Reviewers", subtitle: "Setup approvals" },
 ];
 
 export default function CreateSOW() {
@@ -204,19 +205,86 @@ export default function CreateSOW() {
     },
   });
 
+  // Extract details from uploaded documents (Step 2 -> Step 3 autopopulate)
+  const extractDetailsMutation = useMutation({
+    mutationFn: async () => {
+      const filesToUse: File[] = selectedReferences.length > 0
+        ? referenceFiles.filter(f => selectedReferences.includes(f.name))
+        : referenceFiles;
+      if (!filesToUse || filesToUse.length === 0) return { extractedFields: {}, documentIds: [] };
+
+      const form = new FormData();
+      filesToUse.forEach(f => form.append('files', f));
+      if (formData.sowType) form.append('sowTypeHint', formData.sowType);
+      const res = await fetch('/api/sows/extract-details', {
+        method: 'POST',
+        body: form,
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || 'Extraction failed');
+      }
+      return await res.json();
+    },
+    onSuccess: (data: any) => {
+      const fields = data?.extractedFields || {};
+      const docIds: string[] = data?.documentIds || [];
+      if (docIds.length > 0) {
+        setSelectedReferences(docIds);
+      }
+      if (fields && Object.keys(fields).length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          sowType: prev.sowType || fields.sowType || prev.sowType,
+          title: fields.title || prev.title,
+          initiative: fields.initiative || prev.initiative,
+          deliveryPortfolio: fields.deliveryPortfolio || prev.deliveryPortfolio,
+          sponsor: fields.sponsor || prev.sponsor,
+          businessOwner: fields.businessOwner || prev.businessOwner,
+          vendorName: fields.vendorName || prev.vendorName,
+          client: fields.client || prev.client,
+          startDate: fields.startDate || prev.startDate,
+          endDate: fields.endDate || prev.endDate,
+          budget: fields.budget || prev.budget,
+          currency: fields.currency || prev.currency,
+          requirements: fields.requirements || prev.requirements,
+        }));
+      }
+      toast({ title: 'Details extracted', description: 'We pre-filled the form using your documents. Review and adjust as needed.' });
+      setCurrentStep(3);
+    },
+    onError: (err: any) => {
+      console.error('Extraction error:', err);
+      toast({ title: 'Extraction failed', description: 'Could not extract details. You can fill the form manually.', variant: 'destructive' });
+      setCurrentStep(3);
+    }
+  });
+
   const filteredTemplates = templates.filter(
     (t) => !formData.sowType || t.sowType.toLowerCase() === formData.sowType.toLowerCase()
   );
 
   const canProceed = () => {
     if (currentStep === 1) return !!formData.sowType;
-    if (currentStep === 2) return !!formData.title && !!formData.initiative && !!formData.vendorName && !!formData.client && !!formData.startDate && !!formData.endDate && !!formData.requirements;
-    if (currentStep === 3) return !!formData.templateId;
+    if (currentStep === 2) return referenceFiles.length >= 0; // allow skipping upload
+    if (currentStep === 3) return !!formData.title && !!formData.initiative && !!formData.vendorName && !!formData.client && !!formData.startDate && !!formData.endDate && !!formData.requirements;
+    if (currentStep === 4) return !!formData.templateId;
     return true;
   };
 
   const handleNext = () => {
-    if (currentStep < 4) {
+    if (currentStep === 2) {
+      // Trigger extraction if files uploaded; else move on
+      if (referenceFiles.length > 0) {
+        extractDetailsMutation.mutate();
+      } else {
+        setCurrentStep(3);
+      }
+      return;
+    }
+    const lastStep = 5;
+    if (currentStep < lastStep) {
       setCurrentStep(currentStep + 1);
     } else {
       createSowMutation.mutate();
@@ -226,17 +294,19 @@ export default function CreateSOW() {
   return (
     <>
       {/* Loader dialog for SOW creation and AI bulk generation */}
-      {(createSowMutation.isPending || aiBulkMutation.isPending) && (
+      {(createSowMutation.isPending || aiBulkMutation.isPending || extractDetailsMutation.isPending) && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40">
           <div className="bg-white rounded-lg shadow-lg p-8 flex flex-col items-center gap-4 min-w-[320px]">
             <Loader2 className="animate-spin w-10 h-10 text-primary" />
             <div className="text-lg font-semibold text-center">
-              {createSowMutation.isPending && !aiBulkMutation.isPending
+              {extractDetailsMutation.isPending ? 'Analyzing documents and extracting details...'
+                : createSowMutation.isPending && !aiBulkMutation.isPending
                 ? "Creating your SOW..."
                 : "Generating all sections with AI..."}
             </div>
             <div className="text-sm text-muted-foreground text-center">
-              {createSowMutation.isPending && !aiBulkMutation.isPending
+              {extractDetailsMutation.isPending ? 'This may take up to a minute for large files.'
+                : createSowMutation.isPending && !aiBulkMutation.isPending
                 ? "Setting up your Statement of Work..."
                 : "This may take up to a minute for large SOWs."}
             </div>
@@ -323,12 +393,12 @@ export default function CreateSOW() {
 
             {currentStep === 2 && (
               <div className="space-y-6">
-                {/* Reference Document Upload Section (now inside Project Details step) */}
+                {/* New separate Documents step */}
                 <Card className="mb-8">
                   <CardHeader>
                     <CardTitle>Reference Documents</CardTitle>
                     <CardDescription>
-                      Upload PDF, PPT, DOCX, or TXT files to use as context for SOW generation. Select which files to include.
+                      Upload PDF, DOCX, PPTX, or TXT files to extract key SOW details and improve AI content.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -344,7 +414,7 @@ export default function CreateSOW() {
                     </div>
                     {referenceFiles.length > 0 && (
                       <div className="space-y-2">
-                        <Label className="font-semibold">Uploaded Files</Label>
+                        <Label className="font-semibold">Select the files to use</Label>
                         <ul className="space-y-1">
                           {referenceFiles.map((file) => (
                             <li key={file.name} className="flex items-center gap-2">
@@ -366,12 +436,11 @@ export default function CreateSOW() {
                     )}
                   </CardContent>
                 </Card>
-                {/* SOW Reference Query (now inside Project Details step) */}
                 <Card className="mb-8">
                   <CardHeader>
                     <CardTitle>SOW Reference (optional)</CardTitle>
                     <CardDescription>
-                      Add a free-text reference or query to further guide context retrieval from your reference documents.
+                      Add a free-text hint to guide extraction and later AI content generation.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -384,6 +453,15 @@ export default function CreateSOW() {
                     />
                   </CardContent>
                 </Card>
+                <div className="text-sm text-muted-foreground">
+                  After you click Next, we'll analyze your documents and auto-fill the project details.
+                </div>
+              </div>
+            )}
+
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                
                 <div className="space-y-2">
                   <Label htmlFor="title">SOW Title *</Label>
                   <Input
@@ -528,7 +606,7 @@ export default function CreateSOW() {
               </div>
             )}
 
-            {currentStep === 3 && (
+            {currentStep === 4 && (
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold mb-4">Select Template</h3>
                 <p className="text-sm text-muted-foreground mb-6">
@@ -565,7 +643,7 @@ export default function CreateSOW() {
               </div>
             )}
 
-            {currentStep === 4 && (
+            {currentStep === 5 && (
               <div className="space-y-6">
                
                 
@@ -691,7 +769,7 @@ export default function CreateSOW() {
               ? "Creating..."
               : aiBulkMutation.isPending
                 ? "Generating with AI..."
-                : currentStep === 4
+                : currentStep === 5
                   ? (autoAIGenerate ? "Create & Auto-Generate" : "Create SOW")
                   : <>
                       Next
