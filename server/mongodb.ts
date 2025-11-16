@@ -1,5 +1,6 @@
 import { MongoClient, Db } from 'mongodb';
 import mongoose from 'mongoose';
+import { initializeAccessControl } from './access-control';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/sow_gen';
 
@@ -14,6 +15,10 @@ export const connectToMongo = async () => {
     const client = await MongoClient.connect(MONGODB_URI);
     db = client.db();
     console.log('MongoDB client connected');
+    
+    // Initialize access control collection
+    initializeAccessControl(db);
+    console.log('Access control initialized');
     
     return db;
   } catch (error) {

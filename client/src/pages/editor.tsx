@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import ReactQuill, { Quill } from "react-quill";
-import { ArrowLeft, Save, Download, Sparkles, Check, CheckCircle2, Clock, XCircle, FileDown, Users2, Copy, Ban, CheckSquare, History, UserCog, RotateCcw, GripVertical, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Download, Sparkles, Check, CheckCircle2, Clock, XCircle, FileDown, Users2, Copy, Ban, CheckSquare, History, UserCog, RotateCcw, GripVertical, Pencil, Trash2, Lock } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -157,6 +157,28 @@ export default function Editor() {
     queryKey: sowId ? [`/api/sows/${sowId}/audit`] : ["/api/audit"],
     enabled: !!sowId,
   });
+
+  // Determine if user can edit this SOW
+  const canEditSow = useMemo(() => {
+    if (!user || !sow) return false;
+    
+    // Cannot edit if ready for submission (final version)
+    if (sow.status === 'ready_for_submission') return false;
+    
+    // Admin can edit any SOW (except ready for submission)
+    if (user.role === "admin") return true;
+    
+    // Creator can edit their own SOWs
+    if (sow.createdBy === user.id) return true;
+    
+    // Current reviewer can edit
+    const pendingApproval = approvals?.find((a) => a.status === 'pending');
+    if (pendingApproval && pendingApproval.reviewerId === user.id) return true;
+    
+    return false;
+  }, [user, sow, approvals]);
+
+  const isFinalVersion = sow?.status === 'ready_for_submission';
 
   useEffect(() => {
     if (sow?.sections) {
@@ -1098,12 +1120,13 @@ export default function Editor() {
                 <Button 
                   size="default"
                   onClick={() => saveMutation.mutate()} 
-                  disabled={saveMutation.isPending} 
+                  disabled={saveMutation.isPending || !canEditSow || isFinalVersion} 
                   data-testid="button-save"
                   className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
+                  title={isFinalVersion ? "Cannot edit final version" : !canEditSow ? "You don't have permission to edit" : ""}
                 >
                   <Save className="w-5 h-5 mr-2" />
-                  {saveMutation.isPending ? "Saving..." : "Save"}
+                  {saveMutation.isPending ? "Saving..." : isFinalVersion ? "Locked" : "Save"}
                 </Button>
               </div>
             </div>
@@ -1134,7 +1157,7 @@ export default function Editor() {
                       variant="outline" 
                       size="sm"
                       onClick={() => getSuggestedSectionsMutation.mutate()}
-                      disabled={getSuggestedSectionsMutation.isPending}
+                      disabled={getSuggestedSectionsMutation.isPending || !canEditSow || isFinalVersion}
                       className="gap-1 h-9 px-3 rounded-lg transition-all hover:shadow-md"
                       title="AI Suggested Sections"
                     >
@@ -1145,6 +1168,7 @@ export default function Editor() {
                       variant="outline" 
                       size="sm"
                       onClick={() => setNewSectionDialogOpen(true)}
+                      disabled={!canEditSow || isFinalVersion}
                       className="gap-1 h-9 px-3 rounded-lg transition-all hover:shadow-md"
                     >
                       <span className="text-lg">+</span>
@@ -1240,6 +1264,37 @@ export default function Editor() {
                     <p className="text-sm text-muted-foreground">Edit this section of your Statement of Work</p>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {isFinalVersion && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 flex items-start gap-3">
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                            <CheckCircle2 className="w-5 h-5 text-green-600" />
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-green-900 mb-1">Final Version - Read Only</h4>
+                          <p className="text-sm text-green-700">
+                            This SOW has been marked as ready for submission and cannot be edited. 
+                            All changes are locked to preserve the final version.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {!canEditSow && !isFinalVersion && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 flex items-start gap-3">
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                            <Ban className="w-5 h-5 text-amber-600" />
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-amber-900 mb-1">Read Only Access</h4>
+                          <p className="text-sm text-amber-700">
+                            You don't have permission to edit this SOW. Only the creator and assigned reviewers can make changes.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     <div className="bg-white rounded border" data-testid="textarea-content">
                       <ReactQuill
                         ref={quillRef}
@@ -1250,6 +1305,7 @@ export default function Editor() {
                         modules={quillModules}
                         formats={quillFormats}
                         style={{ minHeight: 300 }}
+                        readOnly={!canEditSow || isFinalVersion}
                       />
                     </div>
                     {hasUnsavedChanges && (

@@ -7,6 +7,7 @@ import { generateContentSuggestion, analyzeSectionQuality, getInlineSuggestion, 
 import { generatePDF, generateWord } from "./export";
 import { createAuthRouter } from "./auth";
 import { emailService } from "./email-service";
+import { getAccessControlConfig, updateAccessControlConfig, getAccessControlHistory } from "./access-control";
 
 let dbStorage: IStorage = storage;
 
@@ -1265,6 +1266,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Export error:", error);
       res.status(500).json({ error: "Failed to export SOW" });
+    }
+  });
+
+  // Access Control Routes
+  
+  // Get current access control configuration
+  app.get("/api/access-control", async (req, res) => {
+    try {
+      const config = await getAccessControlConfig();
+      res.json(config);
+    } catch (error) {
+      console.error("Failed to get access control config:", error);
+      res.status(500).json({ error: "Failed to get access control configuration" });
+    }
+  });
+
+  // Update access control configuration (admin only)
+  app.post("/api/access-control", async (req, res) => {
+    // Check authentication
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    try {
+      const user = await dbStorage.getUserById(req.session.userId);
+      
+      if (!user || user.role !== 'admin') {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { rules } = req.body;
+      
+      if (!rules || !Array.isArray(rules)) {
+        return res.status(400).json({ error: "Invalid rules format" });
+      }
+
+      const updatedConfig = await updateAccessControlConfig(rules, req.session.userId);
+      res.json(updatedConfig);
+    } catch (error) {
+      console.error("Failed to update access control config:", error);
+      res.status(500).json({ error: "Failed to update access control configuration" });
+    }
+  });
+
+  // Get access control history (admin only)
+  app.get("/api/access-control/history", async (req, res) => {
+    // Check authentication
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    try {
+      const user = await dbStorage.getUserById(req.session.userId);
+      
+      if (!user || user.role !== 'admin') {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const history = await getAccessControlHistory();
+      res.json(history);
+    } catch (error) {
+      console.error("Failed to get access control history:", error);
+      res.status(500).json({ error: "Failed to get access control history" });
     }
   });
 

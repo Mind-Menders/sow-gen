@@ -13,6 +13,7 @@ import Editor from "@/pages/editor";
 import Templates from "@/pages/templates";
 import Workflows from "@/pages/workflows";
 import ProfileManager from "@/pages/profile-manager";
+import AccessControl from "@/pages/access-control";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
@@ -39,6 +40,7 @@ function Router() {
       <Route path="/templates" component={Templates} />
       <Route path="/workflows" component={Workflows} />
       <Route path="/profilemanager" component={ProfileManager} />
+      <Route path="/access-control" component={AccessControl} />
       <Route component={NotFound} />
     </Switch>
   );
