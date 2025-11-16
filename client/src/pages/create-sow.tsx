@@ -65,11 +65,17 @@ export default function CreateSOW() {
   const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
   const [selectedReferences, setSelectedReferences] = useState<string[]>([]);
 
-  // Handle file upload
+  // Handle file upload (auto-select all uploaded documents for RAG)
   const handleReferenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files);
-      setReferenceFiles((prev) => [...prev, ...files]);
+      setReferenceFiles(prev => {
+        const merged = [...prev, ...files];
+        // Auto-select every file by name (unique set)
+        const allNames = Array.from(new Set(merged.map(f => f.name)));
+        setSelectedReferences(allNames);
+        return merged;
+      });
     }
   };
 
@@ -460,122 +466,137 @@ export default function CreateSOW() {
             )}
 
             {currentStep === 3 && (
-              <div className="space-y-6">
-                
-                <div className="space-y-2">
-                  <Label htmlFor="title">SOW Title *</Label>
-                  <Input
-                    id="title"
-                    placeholder="e.g., Digital Transformation Project 2024"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    data-testid="input-title"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-8">
+                <h2 className="text-2xl font-bold">Project Details</h2>
+                {/* Required Fields */}
+                <div className="space-y-6 p-4 border rounded-md bg-muted/40">
+                  <h3 className="text-lg font-semibold">Required Fields</h3>
                   <div className="space-y-2">
-                    <Label htmlFor="initiative">Initiative *</Label>
+                    <Label htmlFor="title">SOW Title *</Label>
                     <Input
-                      id="initiative"
-                      placeholder="Initiative name"
-                      value={formData.initiative}
-                      onChange={(e) => setFormData({ ...formData, initiative: e.target.value })}
-                      data-testid="input-initiative"
+                      id="title"
+                      className="text-lg h-12"
+                      placeholder="e.g., Digital Transformation Project 2024"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      data-testid="input-title"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="deliveryPortfolio">Delivery Portfolio</Label>
-                    <Input
-                      id="deliveryPortfolio"
-                      placeholder="Portfolio name"
-                      value={formData.deliveryPortfolio}
-                      onChange={(e) => setFormData({ ...formData, deliveryPortfolio: e.target.value })}
-                      data-testid="input-delivery-portfolio"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="sponsor">Sponsor</Label>
-                    <Input
-                      id="sponsor"
-                      placeholder="Project sponsor name"
-                      value={formData.sponsor}
-                      onChange={(e) => setFormData({ ...formData, sponsor: e.target.value })}
-                      data-testid="input-sponsor"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="businessOwner">Business Owner</Label>
-                    <Input
-                      id="businessOwner"
-                      placeholder="Business owner name"
-                      value={formData.businessOwner}
-                      onChange={(e) => setFormData({ ...formData, businessOwner: e.target.value })}
-                      data-testid="input-business-owner"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="vendor">Vendor Name *</Label>
-                  <Input
-                    id="vendor"
-                    placeholder="Vendor or contractor name"
-                    value={formData.vendorName}
-                    onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
-                    data-testid="input-vendor"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="client">Client *</Label>
-                  <Input
-                    id="client"
-                    placeholder="Client name"
-                    value={formData.client}
-                    onChange={(e) => setFormData({ ...formData, client: e.target.value })}
-                    data-testid="input-client"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="startDate">Start Date *</Label>
-                    <Input
-                      id="startDate"
-                      type="date"
-                      value={formData.startDate}
-                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                      data-testid="input-start-date"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="initiative">Initiative *</Label>
+                      <Input
+                        id="initiative"
+                        placeholder="Initiative name"
+                        value={formData.initiative}
+                        onChange={(e) => setFormData({ ...formData, initiative: e.target.value })}
+                        data-testid="input-initiative"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="vendor">Vendor Name *</Label>
+                      <Input
+                        id="vendor"
+                        placeholder="Vendor or contractor name"
+                        value={formData.vendorName}
+                        onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
+                        data-testid="input-vendor"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="endDate">End Date *</Label>
+                    <Label htmlFor="client">Client *</Label>
                     <Input
-                      id="endDate"
-                      type="date"
-                      value={formData.endDate}
-                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                      data-testid="input-end-date"
+                      id="client"
+                      placeholder="Client name"
+                      value={formData.client}
+                      onChange={(e) => setFormData({ ...formData, client: e.target.value })}
+                      data-testid="input-client"
                     />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="startDate">Start Date *</Label>
+                      <Input
+                        id="startDate"
+                        type="date"
+                        value={formData.startDate}
+                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                        data-testid="input-start-date"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="endDate">End Date *</Label>
+                      <Input
+                        id="endDate"
+                        type="date"
+                        value={formData.endDate}
+                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                        data-testid="input-end-date"
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <Label htmlFor="budget">Budget</Label>
-                    <Input
-                      id="budget"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formData.budget}
-                      onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                      data-testid="input-budget"
+                    <Label htmlFor="requirements">Requirements *</Label>
+                    <Textarea
+                      id="requirements"
+                      placeholder="Enter key requirements and expectations for this SOW..."
+                      value={formData.requirements}
+                      onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
+                      className="min-h-[120px]"
+                      data-testid="textarea-requirements"
                     />
+                    <p className="text-xs text-muted-foreground">These requirements will be used by AI to generate better content suggestions</p>
+                  </div>
+                </div>
+                {/* Optional Fields */}
+                <div className="space-y-6 p-4 border rounded-md bg-muted/20">
+                  <h3 className="text-lg font-semibold">Optional Fields</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="deliveryPortfolio">Delivery Portfolio</Label>
+                      <Input
+                        id="deliveryPortfolio"
+                        placeholder="Portfolio name"
+                        value={formData.deliveryPortfolio}
+                        onChange={(e) => setFormData({ ...formData, deliveryPortfolio: e.target.value })}
+                        data-testid="input-delivery-portfolio"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="sponsor">Sponsor</Label>
+                      <Input
+                        id="sponsor"
+                        placeholder="Project sponsor name"
+                        value={formData.sponsor}
+                        onChange={(e) => setFormData({ ...formData, sponsor: e.target.value })}
+                        data-testid="input-sponsor"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="businessOwner">Business Owner</Label>
+                      <Input
+                        id="businessOwner"
+                        placeholder="Business owner name"
+                        value={formData.businessOwner}
+                        onChange={(e) => setFormData({ ...formData, businessOwner: e.target.value })}
+                        data-testid="input-business-owner"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="budget">Budget</Label>
+                      <Input
+                        id="budget"
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.budget}
+                        onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+                        data-testid="input-budget"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="currency">Currency</Label>
@@ -587,21 +608,6 @@ export default function CreateSOW() {
                       data-testid="input-currency"
                     />
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="requirements">Requirements *</Label>
-                  <Textarea
-                    id="requirements"
-                    placeholder="Enter key requirements and expectations for this SOW..."
-                    value={formData.requirements}
-                    onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
-                    className="min-h-[120px]"
-                    data-testid="textarea-requirements"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    These requirements will be used by AI to generate better content suggestions
-                  </p>
                 </div>
               </div>
             )}
