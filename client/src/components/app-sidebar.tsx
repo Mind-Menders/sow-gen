@@ -1,4 +1,4 @@
-import { Home, FileText, FileStack, Workflow, User, FileSignature, LogOut, ChevronUp, KeyRound, Shield } from "lucide-react";
+import { Home, FileText, FileStack, Workflow, User, FileSignature, LogOut, ChevronUp, KeyRound, Shield, BarChart3 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import {
@@ -35,6 +35,12 @@ const menuItems = [
     url: "/",
     icon: Home,
     color: "text-blue-500",
+  },
+  {
+    title: "AI Dashboard",
+    url: "/ai-dashboard",
+    icon: BarChart3,
+    color: "text-cyan-600",
   },
   {
     title: "New SOW Request",
@@ -176,12 +182,7 @@ export function AppSidebar() {
       {/* Visual edge indicator when collapsed */}
       <div className="fixed left-0 top-1/2 -translate-y-1/2 w-1 h-32 bg-gradient-to-b from-transparent via-primary/30 to-transparent rounded-r-full group-data-[state=expanded]:hidden pointer-events-none transition-opacity duration-300" />
       
-      <div
-        onMouseLeave={() => {
-          if (!isMobile) setOpen(false);
-        }}
-        className="h-full"
-      >
+      <div className="h-full">
       <SidebarHeader className="p-6 border-b overflow-hidden group-data-[collapsible=icon]:p-3 transition-all duration-300">
         {/* Emirates Logo - Full Width */}
         <div className="mb-4 group-data-[collapsible=icon]:hidden transition-opacity duration-300">

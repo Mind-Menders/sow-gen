@@ -696,3 +696,84 @@ function getDefaultSectionSuggestions(
     .slice(0, 5);
 }
 
+/**
+ * Analyze SOW metrics data and provide AI-generated insights
+ */
+export async function analyzeMetrics(metrics: any): Promise<string> {
+  const prompt = `You are a senior business analyst reviewing SOW (Statement of Work) metrics. Analyze the following data and provide 3-5 actionable insights in HTML format.
+
+Metrics Data:
+- Total SOWs: ${metrics.totalSows || 0}
+- Average Cycle Time: ${metrics.avgCycleTimeDays?.toFixed(1) || 0} days
+- Average Completeness: ${metrics.avgCompleteness?.toFixed(0) || 0}%
+- Throughput (last 30 days): ${metrics.throughput30 || 0} SOWs finalized
+- Status Distribution: ${JSON.stringify(metrics.statusCounts || {})}
+- Type Distribution: ${JSON.stringify(metrics.typeCounts || {})}
+- Top Incomplete Sections: ${JSON.stringify((metrics.topIncomplete || []).map((s: any) => s.title))}
+- Reviewer Workload: ${JSON.stringify((metrics.reviewers || []).map((r: any) => ({ name: r.name, pending: r.pending, avgHours: r.avgHours?.toFixed(1) })))}
+
+Provide insights in clean HTML format:
+- Use <div class="insight"> for each insight
+- Use <strong> for key metrics
+- Use <span class="recommendation"> for actionable recommendations
+- Focus on bottlenecks, efficiency opportunities, quality issues, and workload imbalances
+- Be specific and data-driven
+
+Example format:
+<div class="insight"><strong>Cycle Time Concern:</strong> The average cycle time of X days is Y% above industry standard. <span class="recommendation">Consider streamlining the review process in stages A and B.</span></div>
+
+Respond with only the HTML content (no markdown, no code fences).`;
+
+  console.log('[AI] Analyzing metrics with provider:', AI_PROVIDER);
+
+  try {
+    let completion = "";
+
+    if (AI_PROVIDER === "azure") {
+      const client = getAzureClient();
+      const model = process.env.AZURE_OPENAI_DEPLOYMENT!;
+      const response = await client.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: "You are an expert business analyst specializing in project metrics and process optimization." },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: 800,
+        temperature: 0.7,
+      });
+      completion = response?.choices?.[0]?.message?.content || "";
+    } else if (AI_PROVIDER === "olama") {
+      const host = process.env.OLAMA_BASE_URL || "http://localhost:11434";
+      const model = process.env.OLAMA_MODEL || "llama2";
+      const ollama = new Ollama({ host });
+      const response = await ollama.generate({
+        model,
+        prompt: `${prompt}`,
+        stream: false,
+      });
+      completion = response.response || "";
+    } else {
+      // Default: OpenAI integrations
+      const response = await openai.chat.completions.create({
+        model: process.env.AI_INTEGRATIONS_MODEL || "gpt-4o",
+        messages: [
+          { role: "system", content: "You are an expert business analyst specializing in project metrics and process optimization." },
+          { role: "user", content: prompt }
+        ],
+        max_completion_tokens: 800,
+        temperature: 0.7,
+      });
+      completion = response.choices?.[0]?.message?.content || "";
+    }
+
+    // Clean up any markdown code fences
+    if (completion.startsWith('```')) {
+      completion = completion.replace(/^```(?:html|markdown)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    }
+
+    return completion.trim();
+  } catch (error) {
+    console.error('[AI] Metrics analysis error:', error);
+    return '<div class="insight">Unable to generate AI insights at this time.</div>';
+  }
+}

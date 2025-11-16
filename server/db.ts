@@ -33,6 +33,10 @@ pool.connect((err, client, release) => {
     console.log('Successfully connected to database');
     
     // Query to check if admin user exists
+    if (!client) {
+      console.warn('Database client not available after connection');
+      return release && release();
+    }
     client.query('SELECT COUNT(*) FROM users WHERE role = $1', ['admin'], (err, result) => {
       if (err) {
         console.error('Error checking admin user:', err);

@@ -564,4 +564,32 @@
     font-family: var(--font-mono);
     font-size: 0.875em;
   }
+
+  /* AI Insights Styling */
+  .insight {
+    padding: 1.25em;
+    margin-bottom: 1.5em;
+    border-left: 4px solid hsl(var(--primary));
+    background-color: hsl(var(--muted) / 0.3);
+    border-radius: 0.5em;
+    line-height: 1.8;
+  }
+
+  .insight strong {
+    color: hsl(var(--primary));
+    font-weight: 800;
+    font-size: 1.2em;
+    letter-spacing: 0.02em;
+  }
+
+  .insight .recommendation {
+    display: block;
+    margin-top: 1em;
+    padding: 1em;
+    background-color: hsl(var(--primary) / 0.1);
+    border-radius: 0.375em;
+    font-style: italic;
+    color: hsl(var(--foreground));
+    border-left: 3px solid hsl(var(--primary) / 0.4);
+  }
 }

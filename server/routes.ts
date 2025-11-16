@@ -1332,6 +1332,197 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ========= Metrics & Analytics =========
+  // Aggregated SOW metrics for AI Dashboard
+  app.get("/api/metrics/sow", async (req, res) => {
+    try {
+      const { startDate, endDate, status, type, department } = req.query;
+      
+      const [allSows, approvals, users] = await Promise.all([
+        dbStorage.getAllSows(),
+        dbStorage.getAllApprovals().catch(() => []),
+        dbStorage.getAllUsers().catch(() => []),
+      ]);
+
+      // Apply filters
+      let sows = allSows.filter((sow) => {
+        if (startDate && new Date(sow.createdAt) < new Date(startDate as string)) return false;
+        if (endDate && new Date(sow.createdAt) > new Date(endDate as string)) return false;
+        if (status && sow.status !== status) return false;
+        if (type && sow.sowType !== type) return false;
+        if (department && sow.deliveryPortfolio !== department) return false;
+        return true;
+      });
+
+      const userMap = new Map<string, any>();
+      for (const u of users as any[]) {
+        if (u?.id) userMap.set(u.id, u);
+      }
+
+      // Status counts and type distribution
+      const statusCounts: Record<string, number> = {};
+      const typeCounts: Record<string, number> = {};
+      const versionHistogram: Record<string, number> = {};
+
+      // Created over time (last 30 days)
+      const today = new Date();
+      const startWindow = new Date(today);
+      startWindow.setDate(today.getDate() - 29);
+      const createdOverTime: Record<string, number> = {};
+      for (let i = 0; i < 30; i++) {
+        const d = new Date(startWindow);
+        d.setDate(startWindow.getDate() + i);
+        const key = d.toISOString().slice(0, 10);
+        createdOverTime[key] = 0;
+      }
+
+      // Section completeness and cycle times
+      let totalCompleteness = 0;
+      let completenessCount = 0;
+      const topIncompleteSections: Record<string, number> = {};
+
+      // Throughput last 30 days (finalized)
+      let throughput30 = 0;
+
+      // Average cycle time to final (days)
+      const cycleTimes: number[] = [];
+
+      for (const sow of sows) {
+        statusCounts[sow.status] = (statusCounts[sow.status] || 0) + 1;
+        typeCounts[sow.sowType] = (typeCounts[sow.sowType] || 0) + 1;
+        versionHistogram[String(sow.version)] = (versionHistogram[String(sow.version)] || 0) + 1;
+
+        // Created over time bucket
+        const createdKey = new Date(sow.createdAt).toISOString().slice(0, 10);
+        if (createdOverTime[createdKey] !== undefined) createdOverTime[createdKey] += 1;
+
+        // Sections completeness
+        try {
+          const sections = typeof sow.sections === 'string' ? JSON.parse(sow.sections) : sow.sections || {};
+          const entries = Object.values(sections || {}) as any[];
+          if (entries.length > 0) {
+            const filled = entries.filter((s) => (s?.content || '').toString().trim().length > 0).length;
+            totalCompleteness += (filled / entries.length) * 100;
+            completenessCount += 1;
+            for (const s of entries) {
+              const title = s?.title || s?.id || 'Untitled';
+              if (!s?.content || !s.content.toString().trim()) {
+                topIncompleteSections[title] = (topIncompleteSections[title] || 0) + 1;
+              }
+            }
+          }
+        } catch {}
+
+        // Cycle time to ready_for_submission using audit trail if present
+        try {
+          const audit = await dbStorage.getSowAuditTrail(sow.id);
+          const createdAt = new Date(sow.createdAt).getTime();
+          let finalTime: number | null = null;
+          for (const a of audit) {
+            if (a.action === 'status_change' && a.newStatus === 'ready_for_submission') {
+              finalTime = new Date(a.createdAt).getTime();
+              break;
+            }
+          }
+          if (!finalTime && sow.status === 'ready_for_submission') {
+            finalTime = new Date(sow.updatedAt).getTime();
+          }
+          if (finalTime) {
+            const days = (finalTime - createdAt) / (1000 * 60 * 60 * 24);
+            if (days >= 0) cycleTimes.push(days);
+            if (finalTime >= startWindow.getTime()) throughput30 += 1;
+          }
+        } catch {}
+      }
+
+      // Reviewer turnaround and pending counts
+      const reviewerStats: Record<string, { reviewerId: string; name: string; count: number; avgHours: number; totalHours: number; reviewed: number; pending: number }>
+        = {};
+      for (const appr of approvals as any[]) {
+        const rid = appr.reviewerId || 'unassigned';
+        if (!reviewerStats[rid]) {
+          const u = userMap.get(rid);
+          reviewerStats[rid] = {
+            reviewerId: rid,
+            name: u?.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : (u?.name || u?.email || 'Unassigned'),
+            count: 0,
+            avgHours: 0,
+            totalHours: 0,
+            reviewed: 0,
+            pending: 0,
+          };
+        }
+        reviewerStats[rid].count += 1;
+        if (appr.status === 'pending') reviewerStats[rid].pending += 1;
+        if (appr.reviewedAt) {
+          const created = new Date(appr.createdAt || new Date()).getTime();
+          const reviewed = new Date(appr.reviewedAt).getTime();
+          const hours = Math.max(0, (reviewed - created) / (1000 * 60 * 60));
+          reviewerStats[rid].totalHours += hours;
+          reviewerStats[rid].reviewed += 1;
+        }
+      }
+      Object.values(reviewerStats).forEach((r) => {
+        r.avgHours = r.reviewed > 0 ? r.totalHours / r.reviewed : 0;
+      });
+
+      const createdSeries = Object.entries(createdOverTime).map(([date, count]) => ({ date, count }));
+      const avgCompleteness = completenessCount > 0 ? totalCompleteness / completenessCount : 0;
+      const avgCycleTimeDays = cycleTimes.length > 0 ? cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length : 0;
+      const topIncomplete = Object.entries(topIncompleteSections)
+        .map(([title, count]) => ({ title, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8);
+
+      // Delivery Portfolio breakdown
+      const portfolioStats: Record<string, { portfolio: string; count: number; avgCycle: number }> = {};
+      if (!department) {
+        for (const sow of sows) {
+          const portfolio = sow.deliveryPortfolio || 'Unassigned';
+          if (!portfolioStats[portfolio]) {
+            portfolioStats[portfolio] = { portfolio, count: 0, avgCycle: 0 };
+          }
+          portfolioStats[portfolio].count += 1;
+        }
+      }
+
+      return res.json({
+        statusCounts,
+        typeCounts,
+        createdSeries,
+        avgCompleteness,
+        avgCycleTimeDays,
+        throughput30,
+        versions: Object.entries(versionHistogram).map(([version, count]) => ({ version, count })),
+        reviewers: Object.values(reviewerStats).sort((a, b) => b.pending - a.pending || b.count - a.count),
+        topIncomplete,
+        portfolios: Object.values(portfolioStats).sort((a, b) => b.count - a.count),
+        totalSows: sows.length,
+      });
+    } catch (error) {
+      console.error('[metrics] Failed to compute metrics', error);
+      res.status(500).json({ error: 'Failed to compute metrics' });
+    }
+  });
+
+  // AI-powered metrics insights
+  app.post("/api/metrics/insights", async (req, res) => {
+    try {
+      const { metrics } = req.body;
+      if (!metrics) {
+        return res.status(400).json({ error: "Metrics data required" });
+      }
+
+      const { analyzeMetrics } = await import("./openai");
+      const insights = await analyzeMetrics(metrics);
+      
+      return res.json({ insights });
+    } catch (error) {
+      console.error('[metrics] Failed to generate AI insights', error);
+      res.status(500).json({ error: 'Failed to generate insights' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

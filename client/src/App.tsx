@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -14,6 +14,7 @@ import Templates from "@/pages/templates";
 import Workflows from "@/pages/workflows";
 import ProfileManager from "@/pages/profile-manager";
 import AccessControl from "@/pages/access-control";
+import AIDashboard from "@/pages/ai-dashboard";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
@@ -36,6 +37,7 @@ function Router() {
       <Route path="/editsow" component={EditSOW} />
       {/* Alias route to support hyphenated path as well */}
       <Route path="/edit-sow" component={EditSOW} />
+  <Route path="/ai-dashboard" component={AIDashboard} />
       <Route path="/editor" component={Editor} />
       <Route path="/templates" component={Templates} />
       <Route path="/workflows" component={Workflows} />
@@ -48,6 +50,8 @@ function Router() {
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
+  const [location] = useLocation();
+  const isEditor = !!location && location.startsWith("/editor");
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "5rem",
@@ -58,9 +62,9 @@ function AppContent() {
   }
 
   return (
-    <SidebarProvider defaultOpen={false} style={style as React.CSSProperties}>
+    <SidebarProvider key={isEditor ? "editor" : "default"} defaultOpen={!isEditor} style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
-        <AppSidebar />
+        {!isEditor && <AppSidebar />}
         <main className="flex-1 overflow-auto w-full">
           <Router />
         </main>
