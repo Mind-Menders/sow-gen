@@ -95,6 +95,8 @@ export default function CreateSOW() {
   // Track the created SOW ID for navigation after AI generation
   const [createdSowId, setCreatedSowId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
+  // Track which fields were AI-populated
+  const [aiPopulatedFields, setAiPopulatedFields] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState({
     sowType: "",
     title: "",
@@ -240,22 +242,26 @@ export default function CreateSOW() {
         setSelectedReferences(docIds);
       }
       if (fields && Object.keys(fields).length > 0) {
-        setFormData(prev => ({
-          ...prev,
-          sowType: prev.sowType || fields.sowType || prev.sowType,
-          title: fields.title || prev.title,
-          initiative: fields.initiative || prev.initiative,
-          deliveryPortfolio: fields.deliveryPortfolio || prev.deliveryPortfolio,
-          sponsor: fields.sponsor || prev.sponsor,
-          businessOwner: fields.businessOwner || prev.businessOwner,
-          vendorName: fields.vendorName || prev.vendorName,
-          client: fields.client || prev.client,
-          startDate: fields.startDate || prev.startDate,
-          endDate: fields.endDate || prev.endDate,
-          budget: fields.budget || prev.budget,
-          currency: fields.currency || prev.currency,
-          requirements: fields.requirements || prev.requirements,
-        }));
+        // Track which fields were populated by AI
+        const populated = new Set<string>();
+        const updates: any = { ...formData };
+        
+        if (fields.sowType && !formData.sowType) { updates.sowType = fields.sowType; populated.add('sowType'); }
+        if (fields.title) { updates.title = fields.title; populated.add('title'); }
+        if (fields.initiative) { updates.initiative = fields.initiative; populated.add('initiative'); }
+        if (fields.deliveryPortfolio) { updates.deliveryPortfolio = fields.deliveryPortfolio; populated.add('deliveryPortfolio'); }
+        if (fields.sponsor) { updates.sponsor = fields.sponsor; populated.add('sponsor'); }
+        if (fields.businessOwner) { updates.businessOwner = fields.businessOwner; populated.add('businessOwner'); }
+        if (fields.vendorName) { updates.vendorName = fields.vendorName; populated.add('vendorName'); }
+        if (fields.client) { updates.client = fields.client; populated.add('client'); }
+        if (fields.startDate) { updates.startDate = fields.startDate; populated.add('startDate'); }
+        if (fields.endDate) { updates.endDate = fields.endDate; populated.add('endDate'); }
+        if (fields.budget) { updates.budget = fields.budget; populated.add('budget'); }
+        if (fields.currency) { updates.currency = fields.currency; populated.add('currency'); }
+        if (fields.requirements) { updates.requirements = fields.requirements; populated.add('requirements'); }
+        
+        setFormData(updates);
+        setAiPopulatedFields(populated);
       }
       toast({ title: 'Details extracted', description: 'We pre-filled the form using your documents. Review and adjust as needed.' });
       setCurrentStep(3);
@@ -472,10 +478,15 @@ export default function CreateSOW() {
                 <div className="space-y-6 p-4 border rounded-md bg-muted/40">
                   <h3 className="text-lg font-semibold">Required Fields</h3>
                   <div className="space-y-2">
-                    <Label htmlFor="title">SOW Title *</Label>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="title" className="font-bold">SOW Title *</Label>
+                      {aiPopulatedFields.has('title') && (
+                        <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                      )}
+                    </div>
                     <Input
                       id="title"
-                      className="text-lg h-12"
+                      className={`text-2xl font-bold h-14 ${aiPopulatedFields.has('title') ? 'border-blue-300 bg-blue-50/50' : ''}`}
                       placeholder="e.g., Digital Transformation Project 2024"
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -484,9 +495,15 @@ export default function CreateSOW() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="initiative">Initiative *</Label>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="initiative">Initiative *</Label>
+                        {aiPopulatedFields.has('initiative') && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                        )}
+                      </div>
                       <Input
                         id="initiative"
+                        className={aiPopulatedFields.has('initiative') ? 'border-blue-300 bg-blue-50/50' : ''}
                         placeholder="Initiative name"
                         value={formData.initiative}
                         onChange={(e) => setFormData({ ...formData, initiative: e.target.value })}
@@ -494,9 +511,15 @@ export default function CreateSOW() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="vendor">Vendor Name *</Label>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="vendor">Vendor Name *</Label>
+                        {aiPopulatedFields.has('vendorName') && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                        )}
+                      </div>
                       <Input
                         id="vendor"
+                        className={aiPopulatedFields.has('vendorName') ? 'border-blue-300 bg-blue-50/50' : ''}
                         placeholder="Vendor or contractor name"
                         value={formData.vendorName}
                         onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
@@ -505,9 +528,15 @@ export default function CreateSOW() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="client">Client *</Label>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="client">Client *</Label>
+                      {aiPopulatedFields.has('client') && (
+                        <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                      )}
+                    </div>
                     <Input
                       id="client"
+                      className={aiPopulatedFields.has('client') ? 'border-blue-300 bg-blue-50/50' : ''}
                       placeholder="Client name"
                       value={formData.client}
                       onChange={(e) => setFormData({ ...formData, client: e.target.value })}
@@ -516,20 +545,32 @@ export default function CreateSOW() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="startDate">Start Date *</Label>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="startDate">Start Date *</Label>
+                        {aiPopulatedFields.has('startDate') && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                        )}
+                      </div>
                       <Input
                         id="startDate"
                         type="date"
+                        className={aiPopulatedFields.has('startDate') ? 'border-blue-300 bg-blue-50/50' : ''}
                         value={formData.startDate}
                         onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                         data-testid="input-start-date"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="endDate">End Date *</Label>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="endDate">End Date *</Label>
+                        {aiPopulatedFields.has('endDate') && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                        )}
+                      </div>
                       <Input
                         id="endDate"
                         type="date"
+                        className={aiPopulatedFields.has('endDate') ? 'border-blue-300 bg-blue-50/50' : ''}
                         value={formData.endDate}
                         onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                         data-testid="input-end-date"
@@ -537,13 +578,18 @@ export default function CreateSOW() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="requirements">Requirements *</Label>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="requirements">Requirements *</Label>
+                      {aiPopulatedFields.has('requirements') && (
+                        <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                      )}
+                    </div>
                     <Textarea
                       id="requirements"
+                      className={`min-h-[120px] ${aiPopulatedFields.has('requirements') ? 'border-blue-300 bg-blue-50/50' : ''}`}
                       placeholder="Enter key requirements and expectations for this SOW..."
                       value={formData.requirements}
                       onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
-                      className="min-h-[120px]"
                       data-testid="textarea-requirements"
                     />
                     <p className="text-xs text-muted-foreground">These requirements will be used by AI to generate better content suggestions</p>
@@ -554,9 +600,15 @@ export default function CreateSOW() {
                   <h3 className="text-lg font-semibold">Optional Fields</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="deliveryPortfolio">Delivery Portfolio</Label>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="deliveryPortfolio">Delivery Portfolio</Label>
+                        {aiPopulatedFields.has('deliveryPortfolio') && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                        )}
+                      </div>
                       <Input
                         id="deliveryPortfolio"
+                        className={aiPopulatedFields.has('deliveryPortfolio') ? 'border-blue-300 bg-blue-50/50' : ''}
                         placeholder="Portfolio name"
                         value={formData.deliveryPortfolio}
                         onChange={(e) => setFormData({ ...formData, deliveryPortfolio: e.target.value })}
@@ -564,9 +616,15 @@ export default function CreateSOW() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="sponsor">Sponsor</Label>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="sponsor">Sponsor</Label>
+                        {aiPopulatedFields.has('sponsor') && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                        )}
+                      </div>
                       <Input
                         id="sponsor"
+                        className={aiPopulatedFields.has('sponsor') ? 'border-blue-300 bg-blue-50/50' : ''}
                         placeholder="Project sponsor name"
                         value={formData.sponsor}
                         onChange={(e) => setFormData({ ...formData, sponsor: e.target.value })}
@@ -576,9 +634,15 @@ export default function CreateSOW() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="businessOwner">Business Owner</Label>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="businessOwner">Business Owner</Label>
+                        {aiPopulatedFields.has('businessOwner') && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                        )}
+                      </div>
                       <Input
                         id="businessOwner"
+                        className={aiPopulatedFields.has('businessOwner') ? 'border-blue-300 bg-blue-50/50' : ''}
                         placeholder="Business owner name"
                         value={formData.businessOwner}
                         onChange={(e) => setFormData({ ...formData, businessOwner: e.target.value })}
@@ -586,11 +650,17 @@ export default function CreateSOW() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="budget">Budget</Label>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="budget">Budget</Label>
+                        {aiPopulatedFields.has('budget') && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                        )}
+                      </div>
                       <Input
                         id="budget"
                         type="number"
                         step="0.01"
+                        className={aiPopulatedFields.has('budget') ? 'border-blue-300 bg-blue-50/50' : ''}
                         placeholder="0.00"
                         value={formData.budget}
                         onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
@@ -599,9 +669,15 @@ export default function CreateSOW() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="currency">Currency</Label>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="currency">Currency</Label>
+                      {aiPopulatedFields.has('currency') && (
+                        <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">AI Generated</Badge>
+                      )}
+                    </div>
                     <Input
                       id="currency"
+                      className={aiPopulatedFields.has('currency') ? 'border-blue-300 bg-blue-50/50' : ''}
                       placeholder="USD"
                       value={formData.currency}
                       onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
