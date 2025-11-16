@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+Dockerfile*
+.dockerignore
+.git
+.gitignore
+**/.git
+**/.cache
+**/dist
+**/.vscode
+**/*.local
+**/*.env
+attached_assets/archive_images

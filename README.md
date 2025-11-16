@@ -141,6 +141,38 @@ This repository is a full-stack SOW generator app. It includes a React + Vite fr
 	$env:NODE_ENV="production"; node dist/index.js
 	```
 
+	## Run with Docker
+
+	You can run the app fully in Docker. The container serves both API and the built client at http://localhost:5000.
+
+	Prerequisites:
+	- Docker and Docker Compose installed
+
+	1) Copy the environment file and adjust values as needed
+
+	```powershell
+	copy .env.example .env
+	```
+
+	Recommended local `.env` settings:
+	- `PORT=5000` (matches exposed port)
+	- `NODE_ENV=production` (enables static serving)
+	- `SESSION_SECURE=false` (so cookies work over HTTP locally)
+	- When using Compose: `MONGODB_URI=mongodb://mongo:27017/sow_gen`
+
+	2) Start with Docker Compose
+
+	```powershell
+	docker compose up --build
+	```
+
+	Then open http://localhost:5000
+
+	Notes:
+	- The app container builds the client into `dist/public` and serves it via Express.
+	- MongoDB runs as a separate service. Data is persisted to the `mongo-data` volume.
+	- In production behind HTTPS, set `SESSION_SECURE=true` to secure session cookies.
+
 	## Key endpoints (server)
 
 	- SOWs: `GET/POST /api/sows`, `GET/PATCH/DELETE /api/sows/:id`, `POST /api/sows/:id/copy`

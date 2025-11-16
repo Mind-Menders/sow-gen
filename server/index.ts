@@ -14,12 +14,15 @@ declare module 'http' {
 }
 
 // Session middleware
+const cookieSecureEnv = (process.env.SESSION_SECURE ?? (process.env.NODE_ENV === 'production' ? 'true' : 'false')).toString().toLowerCase();
+const cookieSecure = cookieSecureEnv === 'true' || cookieSecureEnv === '1';
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'development_secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: cookieSecure,
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }

@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    container_name: sow-gen-app
+    ports:
+      - "5000:5000"
+    env_file: .env
+    environment:
+      # Ensure cookies work over HTTP in local Docker; set to true in prod behind HTTPS
+      SESSION_SECURE: "false"
+      # Use the mongo service host
+      MONGODB_URI: mongodb://mongo:27017/sow_gen
+      # Ensure port matches exposed
+      PORT: 5000
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:7
+    container_name: sow-gen-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:

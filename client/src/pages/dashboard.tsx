@@ -169,7 +169,7 @@ export default function Dashboard() {
       
       <div className="relative w-full mx-auto p-8 space-y-8">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-foreground" data-testid="text-page-title">SOW Dashboard</h1>
+          <h1 className="text-3xl font-bold text-foreground" data-testid="text-page-title">Statement Of Work Dashboard</h1>
           <p className="text-muted-foreground" data-testid="text-page-description">Manage and track all your Statement of Work documents</p>
         </div>
 
