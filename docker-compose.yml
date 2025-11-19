@@ -8,10 +8,12 @@ services:
       - "5000:5000"
     env_file: .env
     environment:
+      # Run in production mode
+      NODE_ENV: production
       # Ensure cookies work over HTTP in local Docker; set to true in prod behind HTTPS
       SESSION_SECURE: "false"
       # Use the mongo service host
-      MONGODB_URI: mongodb://mongo:27017/sow_gen
+      MONGODB_URI: mongodb://mongo:27017/sow_generator
       # Ensure port matches exposed
       PORT: 5000
     depends_on:

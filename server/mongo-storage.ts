@@ -283,62 +283,47 @@ export class MongoStorage implements IStorage {
     // Seed users if empty
     const userCount = await this.usersCollection.countDocuments();
     if (userCount === 0) {
+      // Import bcrypt for password hashing
+      const { hash } = await import("bcrypt");
+      const defaultPassword = await hash("admin123", 10);
+      
       const users = [
         {
           _id: new ObjectId(),
-          name: "Sarah Johnson",
-          email: "sarah.johnson@company.com",
-          password: "",
-          firstName: "Sarah",
-          lastName: "Johnson",
-          role: "manager",
-          profileImageUrl: "",
-          department: "",
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          _id: new ObjectId(),
-          name: "Michael Chen",
-          email: "michael.chen@company.com",
-          password: "",
-          firstName: "Michael",
-          lastName: "Chen",
-          role: "reviewer",
-          profileImageUrl: "",
-          department: "",
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          _id: new ObjectId(),
-          name: "Emily Davis",
-          email: "emily.davis@company.com",
-          password: "",
-          firstName: "Emily",
-          lastName: "Davis",
-          role: "reviewer",
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          _id: new ObjectId(),
-          name: "John Smith",
-          email: "john.smith@company.com",
-          password: "",
-          firstName: "John",
-          lastName: "Smith",
+          name: "Admin User",
+          email: "admin@example.com",
+          password: defaultPassword,
+          firstName: "Admin",
+          lastName: "User",
           role: "admin",
+          profileImageUrl: "",
+          department: "",
           isActive: true,
+          forcePasswordChange: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          _id: new ObjectId(),
+          name: "Harry Viswa",
+          email: "harry.viswa@gmail.com",
+          password: defaultPassword,
+          firstName: "Harry",
+          lastName: "Viswa",
+          role: "admin",
+          profileImageUrl: "",
+          department: "",
+          isActive: true,
+          forcePasswordChange: false,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
       ];
 
       await this.usersCollection.insertMany(users as any);
+      console.log("[MongoDB Storage] ✓ Created 2 default admin users:");
+      console.log("[MongoDB Storage]   - admin@example.com (password: admin123)");
+      console.log("[MongoDB Storage]   - harry.viswa@gmail.com (password: admin123)");
     }
 
     // Seed workflows if empty

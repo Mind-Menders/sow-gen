@@ -365,37 +365,55 @@ async function createAuthRouter() {
     }
   });
 
-  // Create initial admin user if none exists (Mongo path preferred)
+  // Create initial admin users if none exist (Mongo path preferred)
   async function createInitialAdmin() {
     try {
-      // DISABLED: Do not reset all user passwords on startup
-      // const hashedPassword = await hash("admin", 10);
-      
       if (usesMongo && MongoUser) {
-        // DISABLED: Do not set default password for all users
-        // await MongoUser.updateMany({}, { $set: { password: hashedPassword } });
-        // console.log("Set default password 'admin' for all users (mongo)");
-
-        const existingAdmin = await MongoUser.findOne({ role: "admin" });
-        if (!existingAdmin) {
+        // Check if any admin users exist
+        const adminCount = await MongoUser.countDocuments({ role: "admin" });
+        
+        if (adminCount === 0) {
+          console.log("[Auth] No admin users found. Creating default admin accounts...");
           const adminHashedPassword = await hash("admin123", 10);
-          await MongoUser.insertOne({
-            email: "admin@example.com",
-            password: adminHashedPassword,
-            firstName: "Admin",
-            lastName: "User",
-            role: "admin",
-            isActive: true
-          });
-          console.log("Created initial admin user (email: admin@example.com, password: admin123) (mongo)");
+          
+          const defaultAdmins = [
+            {
+              email: "admin@example.com",
+              password: adminHashedPassword,
+              firstName: "Admin",
+              lastName: "User",
+              name: "Admin User",
+              role: "admin",
+              isActive: true,
+              forcePasswordChange: false,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+            {
+              email: "harry.viswa@gmail.com",
+              password: adminHashedPassword,
+              firstName: "Harry",
+              lastName: "Viswa",
+              name: "Harry Viswa",
+              role: "admin",
+              isActive: true,
+              forcePasswordChange: false,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }
+          ];
+          
+          await MongoUser.insertMany(defaultAdmins);
+          console.log("[Auth] ✓ Created 2 default admin users:");
+          console.log("[Auth]   - admin@example.com (password: admin123)");
+          console.log("[Auth]   - harry.viswa@gmail.com (password: admin123)");
+        } else {
+          console.log(`[Auth] Found ${adminCount} existing admin user(s)`);
         }
       } else if (drizzleDb && drizzleUsers) {
-        // DISABLED: Do not set default password for all users
-        // await drizzleDb.update(drizzleUsers).set({ password: hashedPassword });
-        // console.log("Set default password 'admin' for all users (drizzle)");
-
         const [existingAdmin] = await drizzleDb.select().from(drizzleUsers).where(drizzleEq(drizzleUsers.role, "admin")).limit(1);
         if (!existingAdmin) {
+          console.log("[Auth] No admin users found. Creating default admin account...");
           const adminHashedPassword = await hash("admin123", 10);
           await drizzleDb.insert(drizzleUsers).values({
             email: "admin@example.com",
@@ -405,13 +423,13 @@ async function createAuthRouter() {
             role: "admin",
             isActive: true
           });
-          console.log("Created initial admin user (email: admin@example.com, password: admin123) (drizzle)");
+          console.log("[Auth] ✓ Created default admin user: admin@example.com (password: admin123)");
         }
       } else {
-        console.log("No database available to create initial admin user");
+        console.log("[Auth] No database available to create initial admin user");
       }
     } catch (error) {
-      console.error("Error updating/creating users:", error);
+      console.error("[Auth] Error creating default admin users:", error);
     }
   }
 
