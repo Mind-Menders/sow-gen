@@ -343,6 +343,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
           text: line,
           alignment: AlignmentType.CENTER,
           spacing: { after: 100 },
+          indent: { left: 720, right: 720 },
         })
       );
     });
@@ -351,6 +352,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
         text: "─".repeat(80),
         alignment: AlignmentType.CENTER,
         spacing: { after: 200 },
+        indent: { left: 720, right: 720 },
       })
     );
   }
@@ -362,21 +364,25 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
       heading: HeadingLevel.TITLE,
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
+      indent: { left: 720, right: 720 }, // 0.5 inch indent on both sides
     }),
     new Paragraph({
       text: `SOW Number: ${sow.sowNumber}`,
       alignment: AlignmentType.CENTER,
       spacing: { after: 100 },
+      indent: { left: 720, right: 720 },
     }),
     new Paragraph({
       text: `Status: ${sow.status}`,
       alignment: AlignmentType.CENTER,
       spacing: { after: 100 },
+      indent: { left: 720, right: 720 },
     }),
     new Paragraph({
       text: `Vendor: ${sow.vendorName}`,
       alignment: AlignmentType.CENTER,
       spacing: { after: 400 },
+      indent: { left: 720, right: 720 },
     })
   );
 
@@ -386,10 +392,12 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
       text: "TABLE OF CONTENTS",
       heading: HeadingLevel.HEADING_1,
       spacing: { after: 200 },
+      indent: { left: 720, right: 720 },
     }),
     new Paragraph({
       text: "─".repeat(80),
       spacing: { after: 200 },
+      indent: { left: 720, right: 720 },
     })
   );
 
@@ -398,6 +406,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
       new Paragraph({
         text: `${index + 1}. ${section.title}`,
         spacing: { after: 100 },
+        indent: { left: 720, right: 720 },
       })
     );
   });
@@ -406,6 +415,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
     new Paragraph({
       text: "─".repeat(80),
       spacing: { before: 200, after: 400 },
+      indent: { left: 720, right: 720 },
     })
   );
 
@@ -416,6 +426,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
         text: `${index + 1}. ${section.title}`,
         heading: HeadingLevel.HEADING_2,
         spacing: { before: 800, after: 300 }, // 2x spacing before heading, 1.5x after
+        indent: { left: 720, right: 720 },
       })
     );
     // Parse and render HTML content
@@ -426,6 +437,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
           new Paragraph({
             text: item.content,
             spacing: { after: 300, line: 312 }, // 1.25x line spacing (312 twips = 1.25x of 240 base)
+            indent: { left: 720, right: 720 },
           })
         );
       } else if (item.type === 'table') {
@@ -477,6 +489,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
           new Paragraph({
             text: "",
             spacing: { after: 200 },
+            indent: { left: 720, right: 720 },
           })
         );
       } else if (item.type === 'list') {
@@ -489,6 +502,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
               bullet: !isOrdered ? { level: 0 } : undefined,
               numbering: isOrdered ? { reference: "numbered-list", level: 0 } : undefined,
               spacing: { after: 100, line: 312 },
+              indent: { left: 720, right: 720 },
             })
           );
         });
@@ -499,6 +513,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
         new Paragraph({
           text: "─".repeat(80),
           spacing: { after: 200 },
+          indent: { left: 720, right: 720 },
         })
       );
     }
@@ -510,6 +525,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
       new Paragraph({
         text: "─".repeat(80),
         spacing: { before: 400, after: 200 },
+        indent: { left: 720, right: 720 },
       })
     );
     const footerLines = options.footer.split("\n");
@@ -519,6 +535,7 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
           text: line,
           alignment: AlignmentType.CENTER,
           spacing: { after: 100 },
+          indent: { left: 720, right: 720 },
         })
       );
     });
@@ -527,7 +544,56 @@ export async function generateWord(sow: Sow, sections: SowSections, options: Exp
   const doc = new Document({
     sections: [
       {
-        children: docChildren,
+        children: [
+          new Table({
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    children: docChildren,
+                    margins: {
+                      top: 360, // 0.25 inch padding inside border
+                      bottom: 360,
+                      left: 180,
+                      right: 180,
+                    },
+                    width: {
+                      size: 100,
+                      type: WidthType.PERCENTAGE,
+                    },
+                    borders: {
+                      top: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
+                      bottom: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
+                      left: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
+                      right: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
+                    },
+                  }),
+                ],
+              }),
+            ],
+            width: {
+              size: 100,
+              type: WidthType.PERCENTAGE,
+            },
+            layout: "fixed",
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
+              bottom: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
+              left: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
+              right: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
+            },
+          }),
+        ],
+        properties: {
+          page: {
+            margin: {
+              top: 720, // 0.5 inch - narrow margin
+              bottom: 720,
+              left: 720,
+              right: 720,
+            },
+          },
+        },
       },
     ],
     numbering: {
