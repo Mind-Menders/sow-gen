@@ -32,6 +32,7 @@ export interface IStorage {
   getSowApprovalsBySowId(sowId: string): Promise<SowApproval[]>;
   getAllApprovals(): Promise<SowApproval[]>;
   updateSowApproval(id: string, updates: Partial<SowApproval>): Promise<SowApproval | null>;
+  deleteSowApproval(id: string): Promise<boolean>;
   
   createSowAuditEntry(entry: InsertSowAuditTrail): Promise<SowAuditTrail>;
   getSowAuditTrail(sowId: string): Promise<SowAuditTrail[]>;
@@ -579,6 +580,13 @@ export class MemStorage implements IStorage {
       ...updates,
     };
     return this.sowApprovals[index];
+  }
+
+  async deleteSowApproval(id: string): Promise<boolean> {
+    const index = this.sowApprovals.findIndex(a => a.id === id);
+    if (index === -1) return false;
+    this.sowApprovals.splice(index, 1);
+    return true;
   }
 
   async createSowAuditEntry(entry: InsertSowAuditTrail): Promise<SowAuditTrail> {

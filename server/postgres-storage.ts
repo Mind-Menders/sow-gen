@@ -179,6 +179,13 @@ export class PostgresStorage implements IStorage {
     return result[0] || null;
   }
 
+  async deleteSowApproval(id: string): Promise<boolean> {
+    const result = await db.delete(sowApprovals)
+      .where(eq(sowApprovals.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
   async getUserByEmail(email: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
     return result[0];

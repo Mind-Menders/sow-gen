@@ -728,6 +728,12 @@ export class MongoStorage implements IStorage {
     };
   }
 
+  async deleteSowApproval(id: string): Promise<boolean> {
+    await this.ensureConnected();
+    const result = await this.approvalsCollection!.deleteOne({ _id: new ObjectId(id) });
+    return result.deletedCount > 0;
+  }
+
   async getSowApprovals(sowId: string): Promise<SowApproval[]> {
     return await this.getSowApprovalsBySowId(sowId);
   }

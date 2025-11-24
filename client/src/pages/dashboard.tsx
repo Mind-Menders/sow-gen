@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { FileText, FileCheck, Clock, CheckCircle2, Plus, Filter, Search, User, Edit, ArrowRight, ChevronLeft, ChevronRight, AlertCircle, Lock } from "lucide-react";
+import { FileText, FileCheck, Clock, CheckCircle2, Plus, Filter, Search, User, Edit, ArrowRight, ChevronLeft, ChevronRight, AlertCircle, Lock, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -313,21 +313,26 @@ export default function Dashboard() {
                 const actionUser = getActionUser(sow);
                 const canEdit = canEditSow(sow);
                 const isFinalVersion = displayStatus === 'ready_for_submission';
+                const isRejected = displayStatus === 'rejected';
               
               return (
               <Link key={sow.id} href={`/editor?id=${sow.id}`}>
                 <Card 
-                  className={`border-card-border hover-elevate group cursor-pointer transition-all duration-300 relative overflow-hidden ${isFinalVersion ? 'ring-2 ring-green-500/50' : ''}`}
+                  className={`border-card-border hover-elevate group cursor-pointer transition-all duration-300 relative overflow-hidden h-full flex flex-col ${
+                    isFinalVersion ? 'ring-2 ring-green-500/50' : 
+                    isRejected ? 'ring-2 ring-red-500/50 bg-red-50/30' : ''
+                  }`}
                   data-testid={`card-sow-${sow.id}`}
                 >
-                  <CardHeader className="space-y-3 pr-16">
+                  <CardHeader className="space-y-3 pr-16 flex-shrink-0">
                     <div className="flex items-start justify-between gap-2">
                       {displayStatus && defaultStatusConfig[displayStatus] ? (
                         <Badge
                           variant={defaultStatusConfig[displayStatus].variant}
                           className={
                             `w-fit uppercase text-xs font-semibold` +
-                            (displayStatus === "ready_for_submission" ? " bg-green-600 text-white" : "")
+                            (displayStatus === "ready_for_submission" ? " bg-green-600 text-white" : "") +
+                            (displayStatus === "rejected" ? " bg-red-600 text-white" : "")
                           }
                         >
                           {defaultStatusConfig[displayStatus].label}
@@ -338,34 +343,38 @@ export default function Dashboard() {
                         </Badge>
                       )}
                       
-                      {/* Version Stamp Badge - Highlighted if final */}
+                      {/* Version Stamp Badge - Highlighted if final or rejected */}
                       <div className="relative">
                         <div 
                           className={`px-3 py-2 bg-gradient-to-br border-2 rounded-md shadow-md transform rotate-2 hover:rotate-0 transition-transform duration-200 ${
                             isFinalVersion 
                               ? 'from-green-500/30 to-emerald-600/40 border-green-600/60 ring-2 ring-green-400/50' 
+                              : isRejected
+                              ? 'from-red-500/30 to-red-600/40 border-red-600/60 ring-2 ring-red-400/50'
                               : 'from-amber-500/20 to-orange-600/30 border-amber-600/40'
                           }`}
                           style={{
                             boxShadow: isFinalVersion 
                               ? "0 2px 6px rgba(34, 197, 94, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)"
+                              : isRejected
+                              ? "0 2px 6px rgba(220, 38, 38, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)"
                               : "0 2px 4px rgba(217, 119, 6, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3)"
                           }}
                         >
                           <div className="text-center">
                             <div className={`text-[10px] font-bold uppercase tracking-wide leading-none ${
-                              isFinalVersion ? 'text-green-900/80' : 'text-amber-900/70'
+                              isFinalVersion ? 'text-green-900/80' : isRejected ? 'text-red-900/80' : 'text-amber-900/70'
                             }`}>
-                              {isFinalVersion ? 'Final' : 'Version'}
+                              {isFinalVersion ? 'Final' : isRejected ? 'Rejected' : 'Version'}
                             </div>
                             <div className={`text-xl font-black leading-none mt-0.5 ${
-                              isFinalVersion ? 'text-green-900' : 'text-amber-900'
+                              isFinalVersion ? 'text-green-900' : isRejected ? 'text-red-900' : 'text-amber-900'
                             }`}>
                               {sow.version ?? 1}
                             </div>
                             {lastEditor && (
                               <div className={`text-[9px] leading-tight mt-0.5 max-w-[80px] truncate ${
-                                isFinalVersion ? 'text-green-900/70' : 'text-amber-900/60'
+                                isFinalVersion ? 'text-green-900/70' : isRejected ? 'text-red-900/70' : 'text-amber-900/60'
                               }`}>
                                 by {lastEditor.firstName || lastEditor.name}
                               </div>
@@ -375,41 +384,44 @@ export default function Dashboard() {
                         {isFinalVersion && (
                           <Lock className="absolute -top-1 -right-1 w-4 h-4 text-green-600" />
                         )}
+                        {isRejected && (
+                          <XCircle className="absolute -top-1 -right-1 w-4 h-4 text-red-600 fill-red-100" />
+                        )}
                       </div>
                     </div>
-                    <h3 className="text-lg font-semibold text-foreground line-clamp-2" data-testid={`text-sow-title-${sow.id}`}>
+                    <h3 className="text-lg font-semibold text-foreground line-clamp-2 min-h-[3.5rem]" data-testid={`text-sow-title-${sow.id}`}>
                       {sow.title}
                     </h3>
                     <p className="text-sm font-mono text-muted-foreground" data-testid={`text-sow-number-${sow.id}`}>
                       #{sow.sowNumber}
                     </p>
                   </CardHeader>
-                  <CardContent className="space-y-4 pr-16">
+                  <CardContent className="space-y-4 pr-16 flex-grow">
                     <div className="space-y-2 text-sm">
-                      <p className="text-foreground" data-testid={`text-vendor-${sow.id}`}>{sow.vendorName}</p>
-                      <p className="text-muted-foreground">
+                      <p className="text-foreground truncate" data-testid={`text-vendor-${sow.id}`}>{sow.vendorName}</p>
+                      <p className="text-muted-foreground truncate">
                         <span className="font-medium">Sponsor:</span> {sow.sponsor}
                       </p>
                       {initiator && (
-                        <p className="text-muted-foreground flex items-center gap-1">
-                          <User className="w-3 h-3" />
-                          <span className="font-medium">Initiated by:</span> {initiator.firstName} {initiator.lastName}
+                        <p className="text-muted-foreground flex items-center gap-1 truncate">
+                          <User className="w-3 h-3 flex-shrink-0" />
+                          <span className="font-medium">Initiated by:</span> <span className="truncate">{initiator.firstName} {initiator.lastName}</span>
                         </p>
                       )}
                       
                       {/* Action Required Indicator */}
                       {actionUser && (
-                        <div className="flex items-center gap-1 text-orange-600 font-medium">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-xs">
+                        <div className="flex items-center gap-1 text-orange-600 font-medium min-h-[1.25rem]">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          <span className="text-xs truncate">
                             Action: {actionUser.id === user?.id ? 'You' : `${actionUser.firstName} ${actionUser.lastName}`}
                           </span>
                         </div>
                       )}
                       
                       {isFinalVersion && (
-                        <Badge className="bg-green-100 text-green-800 border-green-300">
-                          <Lock className="w-3 h-3 mr-1" />
+                        <Badge className="bg-green-100 text-green-800 border-green-300 min-h-[1.5rem]">
+                          <Lock className="w-3 h-3 mr-1 flex-shrink-0" />
                           Locked - No Edits
                         </Badge>
                       )}

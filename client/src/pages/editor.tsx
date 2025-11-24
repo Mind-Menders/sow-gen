@@ -162,10 +162,10 @@ export default function Editor() {
   const canEditSow = useMemo(() => {
     if (!user || !sow) return false;
     
-    // Cannot edit if ready for submission (final version)
-    if (sow.status === 'ready_for_submission') return false;
+    // Cannot edit if ready for submission (final version) or rejected
+    if (sow.status === 'ready_for_submission' || sow.status === 'rejected') return false;
     
-    // Admin can edit any SOW (except ready for submission)
+    // Admin can edit any SOW (except ready for submission or rejected)
     if (user.role === "admin") return true;
     
     // Creator can edit their own SOWs
@@ -179,6 +179,7 @@ export default function Editor() {
   }, [user, sow, approvals]);
 
   const isFinalVersion = sow?.status === 'ready_for_submission';
+  const isRejected = sow?.status === 'rejected';
 
   useEffect(() => {
     if (sow?.sections) {
@@ -369,23 +370,6 @@ export default function Editor() {
         title: "Marked as Reviewed",
         description: "Your review has been recorded.",
       });
-
-      // Check if all approvals are reviewed
-      try {
-        const approvalsRes = await apiRequest("GET", `/api/sows/${sowId}/approvals`);
-        const allReviewed = Array.isArray(approvalsRes) && approvalsRes.length > 0 && approvalsRes.every((a) => a.reviewedAt);
-        if (allReviewed) {
-          await apiRequest("PATCH", `/api/sows/${sowId}`, { status: "ready_for_submission" });
-          queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
-          queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
-          toast({
-            title: "SOW Ready for Submission",
-            description: "All reviewers have approved. Status updated.",
-          });
-        }
-      } catch (e) {
-        console.error("Error updating SOW status after all reviews:", e);
-      }
     },
     onError: (err) => {
       console.error('Mark as reviewed error:', err);
@@ -399,9 +383,8 @@ export default function Editor() {
 
   const copySowMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", `/api/sows/${sowId}/copy`, {
-        createdBy: sow?.createdBy,
-      });
+      // No need to pass createdBy - server will use current session user
+      return apiRequest("POST", `/api/sows/${sowId}/copy`, {});
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
@@ -490,6 +473,31 @@ export default function Editor() {
       toast({
         title: "Reassign Failed",
         description: "Could not reassign reviewer. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const markReadyForSubmissionMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PATCH", `/api/sows/${sowId}/ready-for-submission`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/sows/${sowId}/audit`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sows"] });
+      toast({
+        title: "SOW Ready for Submission",
+        description: "All approvals are complete. SOW is now ready for submission.",
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.details 
+        ? `${error.error || 'Not all approvals are complete'}. Pending: ${error.details.pending || 0}, Rejected: ${error.details.rejected || 0}`
+        : error?.error || "Could not mark SOW as ready for submission. Please try again.";
+      toast({
+        title: "Failed",
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -1120,13 +1128,13 @@ export default function Editor() {
                 <Button 
                   size="default"
                   onClick={() => saveMutation.mutate()} 
-                  disabled={saveMutation.isPending || !canEditSow || isFinalVersion} 
+                  disabled={saveMutation.isPending || !canEditSow || isFinalVersion || isRejected} 
                   data-testid="button-save"
                   className="h-10 px-6 rounded-lg transition-all hover:shadow-md"
-                  title={isFinalVersion ? "Cannot edit final version" : !canEditSow ? "You don't have permission to edit" : ""}
+                  title={isRejected ? "Cannot edit rejected SOW" : isFinalVersion ? "Cannot edit final version" : !canEditSow ? "You don't have permission to edit" : ""}
                 >
                   <Save className="w-5 h-5 mr-2" />
-                  {saveMutation.isPending ? "Saving..." : isFinalVersion ? "Locked" : "Save"}
+                  {saveMutation.isPending ? "Saving..." : isRejected ? "Rejected" : isFinalVersion ? "Locked" : "Save"}
                 </Button>
               </div>
             </div>
@@ -1136,11 +1144,51 @@ export default function Editor() {
         <Tabs defaultValue="editor" className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="editor">Editor</TabsTrigger>
-            <TabsTrigger value="review">
+            <TabsTrigger value="review" disabled={isRejected}>
               <Users2 className="w-4 h-4 mr-2" />
               Review and Approvals
             </TabsTrigger>
           </TabsList>
+
+          {/* Rejected Status Banner */}
+          {isRejected && (
+            <div className="mt-6 bg-red-50 border-2 border-red-300 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <XCircle className="w-6 h-6 text-red-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-bold text-red-900 text-lg mb-1">SOW Rejected</h3>
+                  <p className="text-red-700 text-sm mb-2">
+                    This SOW has been rejected and cannot be edited or submitted for review.
+                  </p>
+                  {auditTrail && auditTrail.length > 0 && (() => {
+                    const rejectionEntry = auditTrail
+                      .filter(a => a.newStatus === 'rejected')
+                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+                    
+                    if (rejectionEntry) {
+                      const rejector = users?.find(u => u.id === rejectionEntry.performedBy);
+                      return (
+                        <div className="bg-red-100 rounded p-3 text-sm">
+                          <p className="text-red-900 font-medium mb-1">
+                            Rejected by: {rejector?.firstName || rejector?.name || 'Unknown'}
+                          </p>
+                          {rejectionEntry.remarks && (
+                            <p className="text-red-800">
+                              <span className="font-medium">Reason:</span> {rejectionEntry.remarks}
+                            </p>
+                          )}
+                          <p className="text-red-600 text-xs mt-1">
+                            {format(new Date(rejectionEntry.createdAt), 'PPpp')}
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
 
           <TabsContent value="editor" className="mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 text-[18px] pl-[1px] pr-[1px] ml-[1px] mr-[1px] pt-[1px] pb-[1px]">
@@ -1280,7 +1328,7 @@ export default function Editor() {
                         </div>
                       </div>
                     )}
-                    {!canEditSow && !isFinalVersion && (
+                    {!canEditSow && !isFinalVersion && !isRejected && (
                       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 flex items-start gap-3">
                         <div className="flex-shrink-0">
                           <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
@@ -1295,6 +1343,21 @@ export default function Editor() {
                         </div>
                       </div>
                     )}
+                    {isRejected && (
+                      <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4 flex items-start gap-3">
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-red-200 flex items-center justify-center">
+                            <XCircle className="w-5 h-5 text-red-600" />
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-red-900 mb-1">SOW Rejected - Read Only</h4>
+                          <p className="text-sm text-red-700">
+                            This SOW has been rejected and cannot be edited. View the Review and Approvals tab for rejection details.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     <div className="bg-white rounded border" data-testid="textarea-content">
                       <ReactQuill
                         ref={quillRef}
@@ -1305,7 +1368,7 @@ export default function Editor() {
                         modules={quillModules}
                         formats={quillFormats}
                         style={{ minHeight: 300 }}
-                        readOnly={!canEditSow || isFinalVersion}
+                        readOnly={!canEditSow || isFinalVersion || isRejected}
                       />
                     </div>
                     {hasUnsavedChanges && (
@@ -1659,7 +1722,104 @@ export default function Editor() {
                 {/* Administrative Actions moved to top */}
                 <div className="mb-6 pb-6 border-b space-y-3">
                   <h3 className="font-medium text-sm">Administrative Actions</h3>
+                  
+                  {/* User-friendly approval status message */}
+                  {sow && 
+                    String(sow.createdBy) === String(user?.id) && 
+                    normalizedStatus === 'in_review' && 
+                    approvals && 
+                    approvals.length > 0 && (
+                    <div className={`rounded-lg p-4 border-2 ${
+                      approvals.every((a) => a.status === 'approved' || a.status === 'reviewed')
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-blue-50 border-blue-200'
+                    }`}>
+                      <div className="flex items-start gap-3">
+                        {approvals.every((a) => a.status === 'approved' || a.status === 'reviewed') ? (
+                          <>
+                            <div className="flex-shrink-0">
+                              <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                                <CheckCircle2 className="w-5 h-5 text-green-600" />
+                              </div>
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-semibold text-green-900 mb-1">All Reviews Complete!</p>
+                              <p className="text-sm text-green-700">
+                                All {approvals.length} reviewer{approvals.length > 1 ? 's have' : ' has'} approved this SOW. 
+                                You can now mark it as ready for submission.
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex-shrink-0">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                <Clock className="w-5 h-5 text-blue-600" />
+                              </div>
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-semibold text-blue-900 mb-1">Review in Progress</p>
+                              <p className="text-sm text-blue-700 mb-2">
+                                {approvals.filter(a => a.status === 'pending').length} of {approvals.length} review{approvals.length > 1 ? 's' : ''} pending.
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 bg-blue-200 rounded-full h-2 overflow-hidden">
+                                  <div 
+                                    className="bg-blue-600 h-full transition-all duration-500"
+                                    style={{ 
+                                      width: `${(approvals.filter(a => a.status === 'approved' || a.status === 'reviewed').length / approvals.length) * 100}%` 
+                                    }}
+                                  />
+                                </div>
+                                <span className="text-xs font-medium text-blue-700 min-w-[3rem] text-right">
+                                  {approvals.filter(a => a.status === 'approved' || a.status === 'reviewed').length}/{approvals.length}
+                                </span>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="flex gap-3 flex-wrap">
+                    {/* Ready for Submission button - only show to creator when all approvals complete and in_review */}
+                    {(() => {
+                      // Use string comparison to handle both string IDs and MongoDB ObjectIds
+                      const isCreator = sow && user?.id && String(sow.createdBy) === String(user.id);
+                      const isInReview = normalizedStatus === 'in_review';
+                      const hasApprovals = approvals && approvals.length > 0;
+                      const allApproved = hasApprovals && approvals.every((a) => a.status === 'approved' || a.status === 'reviewed');
+                      
+                      const shouldShow = isCreator && isInReview && hasApprovals && allApproved;
+                      
+                      console.log('Ready for Submission button check:', {
+                        sowCreatedBy: sow?.createdBy,
+                        userId: user?.id,
+                        isCreator,
+                        isInReview,
+                        hasApprovals,
+                        allApproved,
+                        shouldShow,
+                        approvals: approvals?.map(a => ({ status: a.status, reviewerId: a.reviewerId }))
+                      });
+                      
+                      if (shouldShow) {
+                        return (
+                          <Button
+                            variant="default"
+                            size="default"
+                            onClick={() => markReadyForSubmissionMutation.mutate()}
+                            disabled={markReadyForSubmissionMutation.isPending}
+                            className="h-10 px-5 rounded-lg transition-all hover:shadow-md bg-green-600 hover:bg-green-700"
+                          >
+                            <CheckSquare className="w-5 h-5 mr-2" />
+                            {markReadyForSubmissionMutation.isPending ? "Updating..." : "Mark Ready for Submission"}
+                          </Button>
+                        );
+                      }
+                      return null;
+                    })()}
                     <Button
                       variant="outline"
                       size="default"

@@ -418,7 +418,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
               stages = [];
             }
             if (Array.isArray(stages)) {
-              const existingApprovals = await dbStorage.getSowApprovalsBySowId(sow.id);
+              let existingApprovals = await dbStorage.getSowApprovalsBySowId(sow.id);
+              
+              // Deduplicate existing approvals before checking
+              if (existingApprovals && existingApprovals.length > 0) {
+                const seen = new Map<string, any>();
+                const uniqueApprovals = [];
+                for (const approval of existingApprovals) {
+                  const key = `${approval.currentStage}:${approval.reviewerId}`;
+                  if (!seen.has(key)) {
+                    seen.set(key, approval);
+                    uniqueApprovals.push(approval);
+                  }
+                }
+                existingApprovals = uniqueApprovals;
+              }
+              
               const approvalKeys = new Set(existingApprovals.map(a => `${a.currentStage}:${a.reviewerId}`));
               for (let stageIdx = 0; stageIdx < stages.length; stageIdx++) {
                 const stage = stages[stageIdx];
@@ -464,6 +479,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Copy SOW endpoint
   app.post("/api/sows/:id/copy", async (req, res) => {
+    // Check authentication
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
     try {
       const originalSow = await dbStorage.getSowById(req.params.id);
       if (!originalSow) {
@@ -471,6 +491,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create a copy with a new SOW number and draft status
+      // Use the current user as the creator (not the original creator)
+      // Do NOT copy workflowId - let user assign a new workflow if needed
       const copiedSow = await dbStorage.createSow({
         title: `${originalSow.title} (Copy)`,
         initiative: originalSow.initiative,
@@ -484,15 +506,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currency: originalSow.currency,
         sowType: originalSow.sowType,
         status: "draft",
-        workflowId: originalSow.workflowId,
+        workflowId: null, // Don't copy workflow - start fresh
         requirements: originalSow.requirements,
-        createdBy: req.body.createdBy || originalSow.createdBy,
+        createdBy: req.session.userId, // Use current user, not original creator
         sections: originalSow.sections,
       });
 
       res.status(201).json(copiedSow);
     } catch (error) {
+      console.error("Failed to copy SOW:", error);
       res.status(500).json({ error: "Failed to copy SOW" });
+    }
+  });
+
+  // Mark SOW as ready for submission (creator action after all approvals complete)
+  app.patch("/api/sows/:id/ready-for-submission", async (req, res) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    try {
+      const sowId = req.params.id;
+      const userId = req.session.userId;
+
+      // Get the SOW
+      const sow = await dbStorage.getSowById(sowId);
+      if (!sow) {
+        return res.status(404).json({ error: "SOW not found" });
+      }
+
+      // Get user details
+      const user = await dbStorage.getUserById(userId);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Check if user is creator or admin
+      const isCreator = sow.createdBy === userId;
+      const isAdmin = user.role === 'admin';
+      if (!isCreator && !isAdmin) {
+        return res.status(403).json({ error: "Only the SOW creator or admin can mark as ready for submission" });
+      }
+
+      // Get all approvals for this SOW
+      const approvals = await dbStorage.getSowApprovalsBySowId(sowId);
+      if (!approvals || approvals.length === 0) {
+        return res.status(400).json({ error: "No approvals found for this SOW" });
+      }
+
+      // Check if all approvals are approved or reviewed
+      const allApproved = approvals.every(
+        (approval) => approval.status === 'approved' || approval.status === 'reviewed'
+      );
+      
+      if (!allApproved) {
+        const pendingCount = approvals.filter(a => a.status === 'pending').length;
+        const rejectedCount = approvals.filter(a => a.status === 'rejected').length;
+        return res.status(400).json({ 
+          error: "Not all approvals are complete", 
+          details: { 
+            total: approvals.length, 
+            pending: pendingCount, 
+            rejected: rejectedCount 
+          }
+        });
+      }
+
+      // Update SOW status to ready_for_submission
+      const previousStatus = sow.status;
+      const updatedSow = await dbStorage.updateSow(sowId, { 
+        status: 'ready_for_submission' 
+      });
+
+      // Create audit trail entry
+      await dbStorage.createSowAuditEntry({
+        sowId,
+        action: 'status_change',
+        performedBy: userId,
+        previousStatus,
+        newStatus: 'ready_for_submission',
+        remarks: 'All approvals complete - marked ready for submission by creator',
+        metadata: JSON.stringify({ 
+          totalApprovals: approvals.length,
+          completedBy: user.email || user.name 
+        }),
+      });
+
+      res.json(updatedSow);
+    } catch (error) {
+      console.error('Failed to mark SOW as ready for submission:', error);
+      res.status(500).json({ error: "Failed to mark SOW as ready for submission" });
     }
   });
 
@@ -879,6 +982,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/sows/:id/approvals", async (req, res) => {
     try {
       let approvals = await dbStorage.getSowApprovalsBySowId(req.params.id);
+      
+      // Remove duplicate approvals based on currentStage:reviewerId
+      if (approvals && approvals.length > 0) {
+        const seen = new Map<string, any>();
+        const uniqueApprovals = [];
+        
+        for (const approval of approvals) {
+          const key = `${approval.currentStage}:${approval.reviewerId}`;
+          const existing = seen.get(key);
+          
+          if (!existing) {
+            seen.set(key, approval);
+            uniqueApprovals.push(approval);
+          } else {
+            // Keep the one with the most recent update (reviewed or with comments)
+            if (approval.reviewedAt && (!existing.reviewedAt || new Date(approval.reviewedAt) > new Date(existing.reviewedAt))) {
+              // Replace with newer approval
+              const idx = uniqueApprovals.findIndex(a => a.id === existing.id);
+              if (idx !== -1) {
+                uniqueApprovals[idx] = approval;
+                seen.set(key, approval);
+              }
+            }
+            // Log duplicate found
+            console.warn(`[Approvals] Duplicate approval found for SOW ${req.params.id}: ${key}`, {
+              kept: seen.get(key).id,
+              duplicate: approval.id
+            });
+          }
+        }
+        
+        approvals = uniqueApprovals;
+      }
+      
       if (!approvals || approvals.length === 0) {
         // No approvals exist, try to create them from workflow
         const sow = await dbStorage.getSowById(req.params.id);
@@ -915,7 +1052,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(approvals || []);
     } catch (error) {
+      console.error("[Approvals] Failed to fetch approvals:", error);
       res.status(500).json({ error: "Failed to fetch approvals" });
+    }
+  });
+
+  // Clean up duplicate approvals for a SOW
+  app.post("/api/sows/:id/approvals/cleanup", async (req, res) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    try {
+      const allApprovals = await dbStorage.getSowApprovalsBySowId(req.params.id);
+      
+      if (!allApprovals || allApprovals.length === 0) {
+        return res.json({ message: "No approvals found", removed: 0 });
+      }
+
+      const seen = new Map<string, any>();
+      const toKeep: string[] = [];
+      const duplicateInfo: any[] = [];
+
+      // Identify duplicates
+      for (const approval of allApprovals) {
+        const key = `${approval.currentStage}:${approval.reviewerId}`;
+        const existing = seen.get(key);
+
+        if (!existing) {
+          seen.set(key, approval);
+          toKeep.push(approval.id);
+        } else {
+          // Determine which to keep: prefer the one with reviewedAt
+          if (approval.reviewedAt && !existing.reviewedAt) {
+            // Keep the new one, mark old one as duplicate
+            duplicateInfo.push({ id: existing.id, key, reason: 'not_reviewed' });
+            toKeep.splice(toKeep.indexOf(existing.id), 1);
+            toKeep.push(approval.id);
+            seen.set(key, approval);
+          } else if (!approval.reviewedAt && existing.reviewedAt) {
+            // Keep existing, mark new as duplicate
+            duplicateInfo.push({ id: approval.id, key, reason: 'already_reviewed' });
+          } else if (approval.reviewedAt && existing.reviewedAt) {
+            // Both reviewed, keep the more recent
+            if (new Date(approval.reviewedAt) > new Date(existing.reviewedAt)) {
+              duplicateInfo.push({ id: existing.id, key, reason: 'older_review' });
+              toKeep.splice(toKeep.indexOf(existing.id), 1);
+              toKeep.push(approval.id);
+              seen.set(key, approval);
+            } else {
+              duplicateInfo.push({ id: approval.id, key, reason: 'newer_but_earlier' });
+            }
+          } else {
+            // Neither reviewed, keep the first one
+            duplicateInfo.push({ id: approval.id, key, reason: 'duplicate_pending' });
+          }
+        }
+      }
+
+      console.log(`[Cleanup] Found ${duplicateInfo.length} duplicate approvals for SOW ${req.params.id}`);
+      console.log('[Cleanup] Duplicates:', duplicateInfo);
+
+      // Actually delete the duplicates
+      let deletedCount = 0;
+      for (const duplicate of duplicateInfo) {
+        try {
+          await dbStorage.deleteSowApproval(duplicate.id);
+          deletedCount++;
+        } catch (err) {
+          console.error(`[Cleanup] Failed to delete approval ${duplicate.id}:`, err);
+        }
+      }
+
+      res.json({ 
+        message: `Removed ${deletedCount} of ${duplicateInfo.length} duplicate approval(s).`,
+        duplicates: duplicateInfo.length,
+        deleted: deletedCount,
+        kept: toKeep.length,
+        total: allApprovals.length,
+        duplicateIds: duplicateInfo.map(d => d.id)
+      });
+    } catch (error) {
+      console.error("[Cleanup] Failed to check approvals:", error);
+      res.status(500).json({ error: "Failed to check approvals" });
     }
   });
 
